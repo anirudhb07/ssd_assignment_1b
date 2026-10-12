@@ -49,7 +49,7 @@ describe('GET /api/reviews/stats', () => {
   });
 });
 
-// TODO (Member B): when checkout is real, replace these with tests that use
+// TODO (Member A): when checkout is real, replace these with tests that use
 // seeded users: one with enough balance, one without, one with an active order.
 describe('POST /api/checkout (mock)', () => {
   it('returns 402 with a message when the balance is too low', async () => {

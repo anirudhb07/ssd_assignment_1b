@@ -9,7 +9,7 @@ const ROLES = [
 ];
 
 // Header control for switching who you are acting as during the demo.
-// TODO (Member C): the lists show the first 20 records only. Add a search
+// TODO (Member B): the lists show the first 20 records only. Add a search
 // box (useDebouncedValue + the `search` param) so any user can be picked.
 export function ActorSwitcher() {
   const { actor, setRole, setUser, setRestaurant } = useActor();

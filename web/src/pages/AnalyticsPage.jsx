@@ -1,12 +1,12 @@
 import { PageHeader, ScreenPlaceholder } from '../components/ui/index.js';
 
-// Workflow 2 + materialized view. Owner: Member D.
+// Workflow 2 + materialized view. Owner: Member C.
 export function AnalyticsPage() {
   return (
     <>
       <PageHeader title="Analytics" description="How each restaurant’s revenue is trending." />
       <ScreenPlaceholder
-        owner="Member D"
+        owner="Member C"
         todo={[
           'Line chart (recharts): daily revenue and 7-day moving average for one restaurant.',
           'Ranked table from DENSE_RANK(): rank, restaurant, total revenue. Paginated.',

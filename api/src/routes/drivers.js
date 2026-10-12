@@ -5,7 +5,7 @@ import { nearbyDrivers, sendMock } from '../mocks.js';
 export const driversRouter = Router();
 
 // GET /api/drivers/nearby?lat=&lng=&radius=5000 — MOCK.
-// TODO (Member B): the Workflow 3 $geoNear pipeline (mongo/02), with the
+// TODO (Member D): the Workflow 3 $geoNear pipeline (mongo/02), with the
 // fixes from the plan: recent pings only, one row per driver, all within radius.
 driversRouter.get('/nearby', (req, res) => {
   const lat = Number(req.query.lat);

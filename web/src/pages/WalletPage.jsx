@@ -1,12 +1,12 @@
 import { PageHeader, ScreenPlaceholder } from '../components/ui/index.js';
 
-// Audit trail. Owner: Member C.
+// Audit trail. Owner: Member B.
 export function WalletPage() {
   return (
     <>
       <PageHeader title="Wallet" description="Every change to a customer’s wallet. Read-only." />
       <ScreenPlaceholder
-        owner="Member C"
+        owner="Member B"
         todo={[
           'Show the wallet_audit_logs rows for the customer you are acting as (or one picked here).',
           'Date filter: from / to → passed as params.',

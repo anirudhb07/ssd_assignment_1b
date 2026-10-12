@@ -1,12 +1,12 @@
 import { PageHeader, ScreenPlaceholder } from '../components/ui/index.js';
 
-// Workflow 1. Owner: Member C.
+// Workflow 1. Owner: Member A.
 export function CheckoutPage() {
   return (
     <>
       <PageHeader title="Checkout" description="Place an order for the customer you are acting as." />
       <ScreenPlaceholder
-        owner="Member C"
+        owner="Member A"
         todo={[
           'Pick a restaurant, then build a cart from its menu (getMenu). Total = sum of items + add-ons.',
           'Submit calls checkout({ userId, restaurantId, amount }).',

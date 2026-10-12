@@ -35,7 +35,7 @@ restaurantsRouter.get('/:id', (req, res) => {
   sendMock(res, { ...restaurant, id: req.params.id, summary: { completedOrderCount: 240, completedRevenue: 354950 } });
 });
 
-// GET /api/restaurants/:id/menu — MOCK. TODO (Member B): Menus.findOne({ restaurantId }).
+// GET /api/restaurants/:id/menu — MOCK. TODO (Member C): Menus.findOne({ restaurantId }).
 // The real query finds nothing until seeder fix #1 links Mongo restaurant IDs
 // to PostgreSQL; return 404 NOT_FOUND when there is no menu.
 restaurantsRouter.get('/:id/menu', (req, res) => {

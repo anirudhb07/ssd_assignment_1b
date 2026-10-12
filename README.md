@@ -118,7 +118,7 @@ docker compose --profile tools up -d
 
 ### How the seed works
 
-The `seed` service runs `sql/01`–`05`, then `mongo/01_collections_and_indexes.js`, then both seeders. It only seeds a database that is empty, so running `docker compose up -d` again won't duplicate data.
+The `seed` service runs every numbered `sql/NN_*.sql` file in order (except `06_window_analytics.sql`, which is a report query, not setup), then `mongo/01_collections_and_indexes.js`, then both seeders. It only seeds a database that is empty, so running `docker compose up -d` again won't duplicate data.
 
 The `sql/`, `mongo/` and `data_generation/` folders are read straight from your copy of the repo. After you pull a teammate's changes:
 
@@ -150,26 +150,30 @@ Copy `.env.example` to `.env` and edit the values. `.env` is git-ignored, so you
 
 ### Who owns what
 
-| Member | Area | Folders | Start with |
-| --- | --- | --- | --- |
-| A | Database fixes, seed data, Docker | `sql/`, `mongo/`, `data_generation/`, `docker/`, `docs/handover_note.md` | The six fixes in `docs/handover_note.md` ("What did not work") |
-| B | API | `api/`, `docs/api_endpoints.md` | Replace the `MOCK` routes with real queries, one area at a time |
-| C | Browse, Checkout, Wallet screens | `web/src/pages/{Browse,Detail,Checkout,Wallet}Page.jsx` | Users and Orders tabs (copy the Restaurants tab) |
-| D | Analytics, Map, Reviews screens | `web/src/pages/{Analytics,Map,Reviews}Page.jsx` | Reviews (its endpoint is already real) |
+Each member owns one workflow end to end: the database fix, the API routes and the screens for it, plus its wireframes (in `docs/design/`), its tests and its part of the demo. Nobody waits on another layer, and everyone does both design and code. The fix numbers refer to "What did not work" in `docs/handover_note.md`.
 
-Everyone draws the wireframes for their own screens in `docs/design/`.
+| Member | Owns | Database | API routes (`api/src/routes/`) | Screens (`web/src/pages/`) |
+| --- | --- | --- | --- | --- |
+| A | Checkout (Workflow 1) | Add `sp_advance_order_status` and `sp_wallet_topup` (fix 5) · `sql/07_*.sql` | `POST /checkout`, `POST /orders/:id/advance`, `POST /users/:id/topup`, `GET /users/:id` | `CheckoutPage`, order detail with "Advance status" in `DetailPage` |
+| B | Browse & Wallet | Fix 2: audit row ordering (trigger, `seq` column, backdated seed rows) · `sql/08_*.sql`, `postgres_seeder.py` | `GET /users`, `/orders`, `/orders/:id`, `/restaurants/:id`, `/users/:id/audit` | `BrowsePage` (Users, Orders tabs), user and restaurant detail in `DetailPage`, `WalletPage`, search in `ActorSwitcher` |
+| C | Analytics & Reviews (Workflows 2, 4) | Fix 1: link Mongo data to Postgres; per-restaurant window view (`RANGE '6 days'`); refresh log for the materialized view (fix 5) · `sql/09_*.sql`, `mongo_seeder.py` | `/analytics/*`, `GET /restaurants/:id/menu` | `AnalyticsPage`, `ReviewsPage` |
+| D | Map (Workflow 3) & release | Fix 3: ping simulator; fix 4: `$geoNear` per driver · `sql/10_*.sql` if needed, `mongo/`, new `data_generation/ping_simulator.py` | `GET /drivers/nearby` | `MapPage` |
+
+D also owns the release work: `docs/handover_note.md`, this README's Assumptions, Changes and Contribution sections, the demo video and the final zip.
+
+**Where to start:** A adds the two procedures, then makes checkout real. B does fix 2, then the users and orders routes and tabs (copy the Restaurants route and tab). C builds the Reviews screen (its endpoint is already real), then fix 1. D writes the ping simulator, then the Map screen against the mock route.
 
 Some files are **shared**: `web/src/styles/tokens.css`, `web/src/components/ui/`, `web/src/api/endpoints.js`, `docs/api_endpoints.md` and `docker-compose.yml`. Tell the team before changing them, and keep those changes in small, separate commits.
 
 ### Mock data: build screens before the API is finished
 
-Every endpoint in `docs/api_endpoints.md` already answers. Routes marked `MOCK` return sample data in the **final** shape, so screens built against them keep working when Member B switches the route to real queries.
+Every endpoint in `docs/api_endpoints.md` already answers. Routes marked `MOCK` return sample data in the **final** shape, so a screen built against them keeps working when its owner switches the route to real queries.
 
 - Mock responses carry the header `X-Mock: true`, and the browser console logs `[mock data] GET /users`.
 - Checkout's mock can show both failures: an amount over 5000 returns `402 INSUFFICIENT_BALANCE`, and `?simulate=active-order` returns `409 ACTIVE_ORDER_EXISTS`.
 - Real so far: `GET /health`, `GET /restaurants`, `GET /reviews/stats`.
 
-### Building a screen (Members C and D)
+### Building a screen
 
 1. Open your page in `web/src/pages/`. The `ScreenPlaceholder` on it lists what to build and which API functions to use. Delete it when the screen is done.
 2. Fetch data with TanStack Query and the functions in `web/src/api/endpoints.js`. Never call `fetch` directly.
@@ -180,7 +184,7 @@ Every endpoint in `docs/api_endpoints.md` already answers. Routes marked `MOCK` 
 
 The web app reloads in the browser when you save a file.
 
-### Making a route real (Member B)
+### Making a route real
 
 1. Open the route file in `api/src/routes/`. Each `MOCK` route has a `TODO` describing the query.
 2. Follow `restaurants.js` (PostgreSQL list) or `reviews.js` (MongoDB pipeline). Use `$1` placeholders, never string-built SQL.
@@ -191,12 +195,13 @@ The web app reloads in the browser when you save a file.
 
 The API restarts when you save a file.
 
-### Changing the database (Member A)
+### Changing the database
 
-1. Edit the scripts in `sql/`, `mongo/` or `data_generation/`.
-2. Apply them with `docker compose run --rm seed`, or `docker compose run --rm -e RESET=1 seed` if tables or seed data changed.
-3. Record the change and the reason in [Changes to the Inherited Code](#changes-to-the-inherited-code) and in `docs/handover_note.md`.
-4. Tell the team to run the same seed command after they pull.
+1. Put new SQL in **your own numbered file** so two people never edit the same script: A uses `sql/07_*.sql`, B `08`, C `09`, D `10`. Use `CREATE OR REPLACE`, `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` and similar, so the file can run more than once. To change something from an older file (for example the audit trigger in `03`), redefine it in your file.
+2. Seeder changes go in `data_generation/` (B: `postgres_seeder.py`, C: `mongo_seeder.py`, D: new `ping_simulator.py`).
+3. Apply them with `docker compose run --rm seed`, or `docker compose run --rm -e RESET=1 seed` if tables or seed data changed.
+4. Record the change and the reason in [Changes to the Inherited Code](#changes-to-the-inherited-code) and in `docs/handover_note.md`.
+5. Tell the team to run the same seed command after they pull.
 
 ### Adding an npm package
 
@@ -302,7 +307,8 @@ ssd_assignment_1b/
 | Docker development environment | `docker-compose.yml`, `docker/seed/`, `.env.example`, `.dockerignore` | One command gives everyone the same databases and seeded data. |
 | Unix line endings for shell scripts | `.gitattributes` | The seed script must run in Linux containers when checked out on Windows. |
 | README restructured | `README.md` | Added setup, team workflow and Assignment 2 sections; Assignment 1 text kept unchanged below. |
-| _Member A: add each SQL / seeder fix here_ | | |
+| Seed runs every numbered SQL file (except `06`) | `docker/seed/seed.sh` | So new scripts (`sql/07`–`10`) are applied without editing the seed. |
+| _Whoever makes a fix: add it here_ | | |
 
 ## Contribution
 

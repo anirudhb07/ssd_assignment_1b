@@ -18,7 +18,7 @@ ordersRouter.get('/:id', (req, res) => {
 });
 
 // POST /api/orders/:id/advance — MOCK.
-// TODO (Member B): CALL sp_advance_order_status (Member A adds it).
+// TODO (Member A): add sp_advance_order_status (sql/07) and CALL it here.
 // PREPARING -> DELIVERING -> DELIVERED; 409 INVALID_TRANSITION if already DELIVERED.
 ordersRouter.post('/:id/advance', (req, res) => {
   sendMock(res, { ...order, id: req.params.id, status: 'DELIVERING' });

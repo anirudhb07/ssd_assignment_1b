@@ -9,7 +9,7 @@ usersRouter.get('/', (req, res) => {
   sendMock(res, { items: users, page: 1, pageSize: 20, total: users.length });
 });
 
-// GET /api/users/:id — MOCK. TODO (Member B): user + their PREPARING/DELIVERING order (or null).
+// GET /api/users/:id — MOCK. TODO (Member A): user + their PREPARING/DELIVERING order (or null).
 usersRouter.get('/:id', (req, res) => {
   sendMock(res, { ...users[0], id: req.params.id, activeOrder: order });
 });
@@ -22,7 +22,7 @@ usersRouter.get('/:id/audit', (req, res) => {
 });
 
 // POST /api/users/:id/topup  { amount } — MOCK.
-// TODO (Member B): CALL sp_wallet_topup (Member A adds it), return new balance + CREDIT row.
+// TODO (Member A): add sp_wallet_topup (sql/07) and CALL it here; return new balance + CREDIT row.
 usersRouter.post('/:id/topup', (req, res) => {
   const amount = Number(req.body?.amount) || 0;
   sendMock(res, {

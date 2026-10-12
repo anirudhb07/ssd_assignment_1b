@@ -22,7 +22,7 @@ export function BrowsePage() {
       {tab === 'restaurants' && <RestaurantsTab />}
       {tab === 'users' && (
         <ScreenPlaceholder
-          owner="Member C"
+          owner="Member B"
           todo={[
             'Same pattern as the Restaurants tab: search by name, paginated table.',
             'Columns: name, wallet balance, active order (if any).',
@@ -33,7 +33,7 @@ export function BrowsePage() {
       )}
       {tab === 'orders' && (
         <ScreenPlaceholder
-          owner="Member C"
+          owner="Member B"
           todo={[
             'Paginated table, newest first. Never load all 120k orders.',
             'Filters: status (StatusBadge), customer, restaurant.',

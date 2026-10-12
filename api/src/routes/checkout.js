@@ -5,7 +5,7 @@ export const checkoutRouter = Router();
 
 // POST /api/checkout  { userId, restaurantId, amount, items? } — MOCK.
 //
-// TODO (Member B): inside withTransaction():
+// TODO (Member A): inside withTransaction():
 //   1. SELECT wallet_balance (balanceBefore)
 //   2. CALL sp_execute_checkout(gen_random_uuid(), userId, restaurantId, amount)
 //   3. SELECT the new balance and the newest wallet_audit_logs row

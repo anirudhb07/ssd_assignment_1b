@@ -11,8 +11,10 @@ if [ "${RESET}" = "1" ]; then
     mongosh --quiet "${MONGO_DB_URI}" --eval "db.dropDatabase()" >/dev/null
 fi
 
-echo "==> Applying sql/01-05"
-for f in /work/sql/0[1-5]_*.sql; do
+# Every numbered script, in order. 06 is a report query, not setup.
+echo "==> Applying sql/ scripts"
+for f in /work/sql/[0-9][0-9]_*.sql; do
+    [ "$(basename "$f")" = "06_window_analytics.sql" ] && continue
     echo "    $(basename "$f")"
     PGOPTIONS="-c client_min_messages=warning" psql -v ON_ERROR_STOP=1 -q -f "$f"
 done

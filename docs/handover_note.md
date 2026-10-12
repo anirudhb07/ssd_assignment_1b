@@ -1,6 +1,6 @@
 # Handover Note
 
-> **Draft.** Written from a first test run on 12 Oct 2026. Member A owns this file: update the "What we changed" section as fixes land, and keep it to about one page.
+> **Draft.** Written from a first test run on 12 Oct 2026. Member D keeps this file tidy and about one page long. Whoever makes a fix adds it to "What we changed".
 
 We inherited the BiteStream backend (P1) from https://github.com/charmin-v/ssd_assignment_1. We ran it end to end on PostgreSQL 16 and MongoDB 7 using the original README's order.
 
@@ -39,7 +39,8 @@ Smaller issues:
 | --- | --- |
 | Added `docker-compose.yml`, `docker/seed/`, `.env.example` | One command gives every team member the same databases and data. The seed step skips when data exists, so it is safe to re-run. |
 | Added `.gitattributes` (`*.sh` with LF endings) | The seed script must keep Unix line endings to run in Linux containers when checked out on Windows. |
-| *(Member A: add each SQL / seeder fix here)* | |
+| Seed runs every numbered SQL file (except `06`) | New scripts (`sql/07`–`10`, one per member) are applied without editing the seed or each other's files. |
+| *(Whoever makes a fix: add it here, with the reason)* | |
 
 ## Suggestions for the original authors
 

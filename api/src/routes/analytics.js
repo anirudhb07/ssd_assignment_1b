@@ -4,8 +4,8 @@ import { ranking, revenue, sendMock, summary } from '../mocks.js';
 export const analyticsRouter = Router();
 
 // GET /api/analytics/revenue?restaurantId= — MOCK.
-// TODO (Member B): the Workflow 2 window query (sql/06) for one restaurant.
-// Member A is wrapping it in a view/function that takes a restaurant id.
+// TODO (Member C): the Workflow 2 window query (sql/06) for one restaurant.
+// Wrap it in a view/function that takes a restaurant id (sql/09) and query that.
 analyticsRouter.get('/revenue', (req, res) => {
   sendMock(res, { ...revenue, restaurantId: req.query.restaurantId ?? revenue.restaurantId });
 });

@@ -16,12 +16,12 @@ The header's "Acting as" switcher stands in for login, so one person can demo al
 
 | Screen | Owner | Wireframe |
 | --- | --- | --- |
-| Browse (users, restaurants, orders + detail views) | Member C | `browse.png` (to add) |
-| Checkout | Member C | `checkout.png` (to add) |
-| Wallet | Member C | `wallet.png` (to add) |
-| Analytics | Member D | `analytics.png` (to add) |
-| Map | Member D | `map.png` (to add) |
-| Reviews + menu | Member D | `reviews.png` (to add) |
+| Checkout, order detail (Workflow 1) | Member A | `checkout.png` (to add) |
+| Browse (users, restaurants, orders + detail views) | Member B | `browse.png` (to add) |
+| Wallet | Member B | `wallet.png` (to add) |
+| Analytics (Workflow 2) | Member C | `analytics.png` (to add) |
+| Reviews + menu (Workflow 4) | Member C | `reviews.png` (to add) |
+| Map (Workflow 3) | Member D | `map.png` (to add) |
 
 ## Visual language
 
