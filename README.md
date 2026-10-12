@@ -11,6 +11,111 @@ The project focuses on database engineering concepts including transaction proce
 
 **Final Submission Commit:** `7022714778d3a1a8e6a39a619c7cdabc642db7e9`
 
+## Development Setup (Docker)
+
+Docker gives every team member the same PostgreSQL and MongoDB, with the same seeded data, without installing either database. You don't need PostgreSQL, MongoDB or Python on your machine.
+
+### 1. Install Docker
+
+| Your OS | What to install |
+| --- | --- |
+| Windows 10/11 | [Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/). Keep the **WSL 2** option ticked during install, and restart when asked. |
+| macOS | [Docker Desktop](https://docs.docker.com/desktop/setup/install/mac-install/). Pick the Apple Silicon or Intel download to match your Mac. |
+| Linux | [Docker Engine](https://docs.docker.com/engine/install/) (or Docker Desktop). After installing Engine, run `sudo usermod -aG docker $USER`, then log out and back in so you can run `docker` without `sudo`. |
+
+On Windows and macOS, open Docker Desktop and wait until it says **Engine running** before you continue. Give it at least 4 GB of memory (Settings → Resources).
+
+Check that it works:
+
+```bash
+docker --version
+docker compose version      # needs v2 or later ("docker compose", not "docker-compose")
+docker run --rm hello-world # prints "Hello from Docker!"
+```
+
+### 2. Get the code
+
+```bash
+git clone https://github.com/anirudhb07/ssd_assignment_1b.git
+cd ssd_assignment_1b
+```
+
+### 3. Start the databases
+
+```bash
+docker compose up -d
+```
+
+The first run downloads the images and then seeds both databases, which takes a few minutes. To watch progress:
+
+```bash
+docker compose logs -f seed
+```
+
+Seeding is finished when the log shows `==> Done. PostgreSQL and MongoDB are ready.` and the seed container exits. Press `Ctrl+C` to stop following the log; the databases keep running.
+
+### 4. Check the data loaded
+
+```bash
+docker compose exec postgres psql -U postgres -d bitestream -c "SELECT COUNT(*) FROM orders;"   # 120000
+docker compose exec mongo mongosh bitestream --quiet --eval "db.Menus.countDocuments()"         # 500
+```
+
+### 5. Connect to the databases
+
+| Service | From your machine (API, DB clients) | From another Compose service |
+| --- | --- | --- |
+| PostgreSQL | `postgresql://postgres:postgres@localhost:15432/bitestream` | `postgres:5432` |
+| MongoDB | `mongodb://localhost:37017/bitestream` | `mongo:27017` |
+
+To browse the data in your web browser, start the optional tools:
+
+```bash
+docker compose --profile tools up -d
+```
+
+- **Adminer** (PostgreSQL): http://localhost:8080. Choose System **PostgreSQL**, Server `postgres`, Username `postgres`, Password `postgres`, Database `bitestream`.
+- **mongo-express** (MongoDB): http://localhost:8081
+
+### Everyday commands
+
+| Task | Command |
+| --- | --- |
+| Start everything | `docker compose up -d` |
+| Stop (data is kept) | `docker compose down` |
+| Wipe both databases and reseed | `docker compose run --rm -e RESET=1 seed` |
+| Stop and delete all data | `docker compose down -v` |
+| See what is running | `docker compose ps -a` |
+| Open a SQL shell | `docker compose exec postgres psql -U postgres -d bitestream` |
+| Open a Mongo shell | `docker compose exec mongo mongosh bitestream` |
+
+### How the seed works
+
+The `seed` service runs `sql/01`–`05`, then `mongo/01_collections_and_indexes.js`, then both seeders. It only seeds a database that is empty, so running `docker compose up -d` again won't duplicate data.
+
+The `sql/`, `mongo/` and `data_generation/` folders are read straight from your copy of the repo. After you pull a teammate's changes:
+
+- **Changed SQL procedures, triggers or views:** run `docker compose run --rm seed`. The scripts are applied again and existing data is kept.
+- **Changed tables or seeders:** run `docker compose run --rm -e RESET=1 seed` to rebuild the data from scratch.
+- **Changed `data_generation/requirements.txt` or `docker/seed/Dockerfile`:** run `docker compose build seed` first.
+
+Driver pings expire 2 hours after they are created (TTL index). If the map shows no drivers, reset and reseed.
+
+### Changing ports or seed size
+
+Copy `.env.example` to `.env` and edit the values. `.env` is git-ignored, so your settings stay on your machine. Use smaller `SEED_*` numbers for a faster seed while developing.
+
+### Troubleshooting
+
+| Problem | Fix |
+| --- | --- |
+| `Cannot connect to the Docker daemon` | Start Docker Desktop (or `sudo systemctl start docker` on Linux) and try again. |
+| `permission denied ... docker.sock` (Linux) | Run `sudo usermod -aG docker $USER`, then log out and back in. |
+| `Bind for 0.0.0.0:15432 failed: port is already allocated` | Something else uses that port. Set `PG_HOST_PORT` (or `MONGO_HOST_PORT`, `ADMINER_HOST_PORT`, `MONGO_EXPRESS_HOST_PORT`) to a free port in `.env`. |
+| Seed fails with `$'\r': command not found` or `invalid option` (Windows) | Git converted `docker/seed/seed.sh` to Windows line endings. Run `git config core.autocrlf input`, delete `docker/seed/seed.sh`, run `git checkout docker/seed/seed.sh`, then start again. |
+| Seed container exited with an error | Run `docker compose logs seed` to see which script failed. |
+| Data looks wrong or half-loaded | Run `docker compose run --rm -e RESET=1 seed`. |
+
 ## 1. Project Objectives
 
 The main objectives of BiteStream are:

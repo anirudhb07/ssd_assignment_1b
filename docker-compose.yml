@@ -1,0 +1,95 @@
+# BiteStream development environment.
+#
+#   docker compose up -d                      start databases + seed (first run loads data)
+#   docker compose run --rm -e RESET=1 seed   wipe both databases and reseed
+#   docker compose --profile tools up -d      also start Adminer + mongo-express
+#
+# Host ports default to 15432 / 37017 so they do not clash with a locally
+# installed PostgreSQL / MongoDB. Override them in .env (see .env.example).
+
+name: bitestream
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: bitestream
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "${PG_HOST_PORT:-15432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d bitestream"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  mongo:
+    image: mongo:7
+    ports:
+      - "${MONGO_HOST_PORT:-37017}:27017"
+    volumes:
+      - mongodata:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+
+  # One-shot job: applies sql/ and mongo/ scripts, then runs the seeders
+  # if the databases are empty. The repo is mounted, so edits to sql/,
+  # mongo/ or data_generation/ apply on the next run without a rebuild.
+  seed:
+    build:
+      context: .
+      dockerfile: docker/seed/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: bitestream
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      MONGO_URI: mongodb://mongo:27017
+      MONGO_DB: bitestream
+      RESET: ${RESET:-0}
+      SEED_USERS: ${SEED_USERS:-10000}
+      SEED_RESTAURANTS: ${SEED_RESTAURANTS:-500}
+      SEED_ORDERS: ${SEED_ORDERS:-120000}
+      SEED_PINGS: ${SEED_PINGS:-500000}
+    volumes:
+      - ./sql:/work/sql:ro
+      - ./mongo:/work/mongo:ro
+      - ./data_generation:/work/data_generation:ro
+      - ./docker/seed/seed.sh:/work/seed.sh:ro
+    command: ["bash", "/work/seed.sh"]
+    restart: "no"
+
+  adminer:
+    image: adminer:4
+    profiles: ["tools"]
+    depends_on: [postgres]
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    ports:
+      - "${ADMINER_HOST_PORT:-8080}:8080"
+
+  mongo-express:
+    image: mongo-express:1.0.2
+    profiles: ["tools"]
+    depends_on: [mongo]
+    environment:
+      ME_CONFIG_MONGODB_URL: mongodb://mongo:27017
+      ME_CONFIG_BASICAUTH: "false"
+    ports:
+      - "${MONGO_EXPRESS_HOST_PORT:-8081}:8081"
+
+volumes:
+  pgdata:
+  mongodata:
