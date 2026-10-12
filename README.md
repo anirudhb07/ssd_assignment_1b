@@ -156,7 +156,7 @@ Agree who takes which letter, then have **one person** fill in all four rows in 
 | --- | --- | --- | --- | --- |
 | A | | | | Checkout (Workflow 1) |
 | B | | | | Browse & Wallet |
-| C | | | | Analytics & Reviews (Workflows 2, 4) |
+| C |Sanjana |2026204012|Sanjana-Venkatesan | Analytics & Reviews (Workflows 2, 4) |
 | D | | | | Map (Workflow 3) & release |
 
 ### Who owns what
