@@ -155,7 +155,7 @@ Agree who takes which letter, then have **one person** fill in all four rows in 
 | Member | Name | Roll number | GitHub username | Owns |
 | --- | --- | --- | --- | --- |
 | A | | | | Checkout (Workflow 1) |
-| B | | | | Browse & Wallet |
+| B | Anirudh | 2026201058 | anirudhb07 | Browse & Wallet |
 | C |Sanjana |2026204012|Sanjana-Venkatesan | Analytics & Reviews (Workflows 2, 4) |
 | D | | | | Map (Workflow 3) & release |
 
