@@ -1,0 +1,52 @@
+/*
+ * Design tokens: the single source of colours, type and spacing.
+ * Components use these variables only — never hard-coded colours — so the
+ * look stays consistent across screens built by different people.
+ * Change a value here and it changes everywhere. Document changes in
+ * docs/design/README.md.
+ */
+:root {
+  /* Brand */
+  --color-primary: #1f6f5c;        /* buttons, links, active nav */
+  --color-primary-hover: #185a4a;
+  --color-primary-soft: #e3f1ec;
+  --color-accent: #d98a1c;         /* highlights, chart series 2 */
+
+  /* Neutrals */
+  --color-bg: #f6f7f6;
+  --color-surface: #ffffff;
+  --color-border: #dfe3e1;
+  --color-text: #1c2321;
+  --color-text-muted: #5f6b67;
+
+  /* Status (also used for order status badges) */
+  --color-success: #2e7d4f;  --color-success-soft: #e2f3e8;
+  --color-warning: #a8650a;  --color-warning-soft: #fcf0d9;
+  --color-danger: #b3362a;   --color-danger-soft: #fbe5e2;
+  --color-info: #2a5db0;     --color-info-soft: #e3ecfa;
+
+  /* Type */
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.6rem;
+
+  /* Spacing scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* Shape */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.06);
+
+  --header-height: 56px;
+  --content-max: 1200px;
+}

@@ -1,19 +1,31 @@
 # BiteStream – Food Delivery & Real-Time Logistics
 
-BiteStream is a database-focused food delivery and real-time logistics system designed to demonstrate the use of **PostgreSQL** for structured transactional data and **MongoDB** for flexible documents, geospatial data, and analytics.
+BiteStream is a food delivery system built on **PostgreSQL** (orders, wallets, audit trail, analytics) and **MongoDB** (menus, reviews, live driver locations).
 
-The project focuses on database engineering concepts including transaction processing, wallet auditing, partial indexing, materialized views, SQL window functions, MongoDB geospatial queries, TTL indexes, and multi-faceted aggregation.
+Assignment 2 adds a **web front end** and a small **API layer** on top of the Assignment 1 database we inherited, so a user can run all four workflows from a browser. The original Assignment 1 documentation is kept unchanged at the [end of this file](#assignment-1-documentation-inherited).
 
----
 ## Repository
 
-**GitHub Repository:** https://github.com/charmin-v/ssd_assignment_1
+- **GitHub repository:** https://github.com/anirudhb07/ssd_assignment_1b
+- **Final submission commit:** _TODO before submitting_
+- **Demo video:** _TODO_
+- **Inherited from:** https://github.com/charmin-v/ssd_assignment_1 (Assignment 1 final commit `7022714778d3a1a8e6a39a619c7cdabc642db7e9`)
 
-**Final Submission Commit:** `7022714778d3a1a8e6a39a619c7cdabc642db7e9`
+## Quick Start
+
+With Docker installed (see [Development Setup](#development-setup-docker) if it isn't):
+
+```bash
+git clone https://github.com/anirudhb07/ssd_assignment_1b.git
+cd ssd_assignment_1b
+docker compose up -d
+```
+
+Wait a few minutes on the first run, then open **http://localhost:5173**. The home page shows whether the API and both databases are connected.
 
 ## Development Setup (Docker)
 
-Docker gives every team member the same PostgreSQL and MongoDB, with the same seeded data, without installing either database. You don't need PostgreSQL, MongoDB or Python on your machine.
+Docker gives every team member the same PostgreSQL, MongoDB, API and web app, with the same seeded data. You don't need PostgreSQL, MongoDB, Python or Node.js on your machine.
 
 ### 1. Install Docker
 
@@ -40,31 +52,42 @@ git clone https://github.com/anirudhb07/ssd_assignment_1b.git
 cd ssd_assignment_1b
 ```
 
-### 3. Start the databases
+On Windows, clone inside WSL (for example in your Ubuntu home folder) if you can. File changes are picked up faster there.
+
+### 3. Start everything
 
 ```bash
 docker compose up -d
 ```
 
-The first run downloads the images and then seeds both databases, which takes a few minutes. To watch progress:
+This starts five containers in order: `postgres` and `mongo`, then `seed` (loads the data and exits), then `api` and `web`. The first run downloads images, seeds the databases and installs npm packages, which takes a few minutes. To watch progress:
 
 ```bash
-docker compose logs -f seed
+docker compose logs -f seed        # ends with "==> Done. PostgreSQL and MongoDB are ready."
+docker compose logs -f api web     # ends with "BiteStream API listening..." and Vite's "ready"
 ```
 
-Seeding is finished when the log shows `==> Done. PostgreSQL and MongoDB are ready.` and the seed container exits. Press `Ctrl+C` to stop following the log; the databases keep running.
+Press `Ctrl+C` to stop following a log; the containers keep running.
 
-### 4. Check the data loaded
+### 4. Check it works
+
+- Open **http://localhost:5173**. The green bar should say *API is up · PostgreSQL connected · MongoDB connected*.
+- Go to **Browse**. The Restaurants tab lists 500 restaurants from PostgreSQL, 20 per page.
+
+From a terminal (no database tools needed on your machine):
 
 ```bash
 docker compose exec postgres psql -U postgres -d bitestream -c "SELECT COUNT(*) FROM orders;"   # 120000
 docker compose exec mongo mongosh bitestream --quiet --eval "db.Menus.countDocuments()"         # 500
+curl http://localhost:4000/api/health                                                           # {"status":"ok",...}
 ```
 
-### 5. Connect to the databases
+### 5. Addresses and connections
 
-| Service | From your machine (API, DB clients) | From another Compose service |
+| Service | From your machine | From another Compose service |
 | --- | --- | --- |
+| Web app | http://localhost:5173 | `web:5173` |
+| API | http://localhost:4000/api | `api:4000` |
 | PostgreSQL | `postgresql://postgres:postgres@localhost:15432/bitestream` | `postgres:5432` |
 | MongoDB | `mongodb://localhost:37017/bitestream` | `mongo:27017` |
 
@@ -83,11 +106,15 @@ docker compose --profile tools up -d
 | --- | --- |
 | Start everything | `docker compose up -d` |
 | Stop (data is kept) | `docker compose down` |
+| See what is running | `docker compose ps -a` |
+| Follow API / web logs | `docker compose logs -f api web` |
+| Restart one service | `docker compose restart api` |
 | Wipe both databases and reseed | `docker compose run --rm -e RESET=1 seed` |
 | Stop and delete all data | `docker compose down -v` |
-| See what is running | `docker compose ps -a` |
 | Open a SQL shell | `docker compose exec postgres psql -U postgres -d bitestream` |
 | Open a Mongo shell | `docker compose exec mongo mongosh bitestream` |
+| Run API tests | `docker compose exec api npm test` |
+| Run web tests | `docker compose exec web npm test` |
 
 ### How the seed works
 
@@ -98,6 +125,7 @@ The `sql/`, `mongo/` and `data_generation/` folders are read straight from your 
 - **Changed SQL procedures, triggers or views:** run `docker compose run --rm seed`. The scripts are applied again and existing data is kept.
 - **Changed tables or seeders:** run `docker compose run --rm -e RESET=1 seed` to rebuild the data from scratch.
 - **Changed `data_generation/requirements.txt` or `docker/seed/Dockerfile`:** run `docker compose build seed` first.
+- **Changed `api/package.json` or `web/package.json`:** run `docker compose restart api web`. They run `npm install` on start.
 
 Driver pings expire 2 hours after they are created (TTL index). If the map shows no drivers, reset and reseed.
 
@@ -111,10 +139,185 @@ Copy `.env.example` to `.env` and edit the values. `.env` is git-ignored, so you
 | --- | --- |
 | `Cannot connect to the Docker daemon` | Start Docker Desktop (or `sudo systemctl start docker` on Linux) and try again. |
 | `permission denied ... docker.sock` (Linux) | Run `sudo usermod -aG docker $USER`, then log out and back in. |
-| `Bind for 0.0.0.0:15432 failed: port is already allocated` | Something else uses that port. Set `PG_HOST_PORT` (or `MONGO_HOST_PORT`, `ADMINER_HOST_PORT`, `MONGO_EXPRESS_HOST_PORT`) to a free port in `.env`. |
-| Seed fails with `$'\r': command not found` or `invalid option` (Windows) | Git converted `docker/seed/seed.sh` to Windows line endings. Run `git config core.autocrlf input`, delete `docker/seed/seed.sh`, run `git checkout docker/seed/seed.sh`, then start again. |
+| `Bind for 0.0.0.0:<port> failed: port is already allocated` | Something else uses that port. Set the matching `*_HOST_PORT` in `.env` to a free port. |
+| Home page says the API is not reachable | Run `docker compose ps -a`. If `api` isn't running, `docker compose logs api` shows why. If `seed` exited with an error, `api` won't start; see the next row. |
 | Seed container exited with an error | Run `docker compose logs seed` to see which script failed. |
+| Seed fails with `$'\r': command not found` (Windows) | `docker/seed/seed.sh` has Windows line endings. Pull the latest `main` (it includes `.gitattributes`), then run `rm docker/seed/seed.sh` and `git checkout -- docker/seed/seed.sh` to get a copy with Unix line endings. |
+| Saving a file doesn't reload the web app (Windows) | Set `WEB_POLLING=true` in `.env`, then `docker compose up -d web`. |
 | Data looks wrong or half-loaded | Run `docker compose run --rm -e RESET=1 seed`. |
+
+## Working on Your Part
+
+### Who owns what
+
+| Member | Area | Folders | Start with |
+| --- | --- | --- | --- |
+| A | Database fixes, seed data, Docker | `sql/`, `mongo/`, `data_generation/`, `docker/`, `docs/handover_note.md` | The six fixes in `docs/handover_note.md` ("What did not work") |
+| B | API | `api/`, `docs/api_endpoints.md` | Replace the `MOCK` routes with real queries, one area at a time |
+| C | Browse, Checkout, Wallet screens | `web/src/pages/{Browse,Detail,Checkout,Wallet}Page.jsx` | Users and Orders tabs (copy the Restaurants tab) |
+| D | Analytics, Map, Reviews screens | `web/src/pages/{Analytics,Map,Reviews}Page.jsx` | Reviews (its endpoint is already real) |
+
+Everyone draws the wireframes for their own screens in `docs/design/`.
+
+Some files are **shared**: `web/src/styles/tokens.css`, `web/src/components/ui/`, `web/src/api/endpoints.js`, `docs/api_endpoints.md` and `docker-compose.yml`. Tell the team before changing them, and keep those changes in small, separate commits.
+
+### Mock data: build screens before the API is finished
+
+Every endpoint in `docs/api_endpoints.md` already answers. Routes marked `MOCK` return sample data in the **final** shape, so screens built against them keep working when Member B switches the route to real queries.
+
+- Mock responses carry the header `X-Mock: true`, and the browser console logs `[mock data] GET /users`.
+- Checkout's mock can show both failures: an amount over 5000 returns `402 INSUFFICIENT_BALANCE`, and `?simulate=active-order` returns `409 ACTIVE_ORDER_EXISTS`.
+- Real so far: `GET /health`, `GET /restaurants`, `GET /reviews/stats`.
+
+### Building a screen (Members C and D)
+
+1. Open your page in `web/src/pages/`. The `ScreenPlaceholder` on it lists what to build and which API functions to use. Delete it when the screen is done.
+2. Fetch data with TanStack Query and the functions in `web/src/api/endpoints.js`. Never call `fetch` directly.
+3. Wrap every query in `QueryState` so loading, empty and error states are handled.
+4. Build from the components in `web/src/components/ui/` and the variables in `web/src/styles/tokens.css`, so all screens look the same.
+5. Show `error.message` from failed requests as-is. The API already writes it for users.
+6. `BrowsePage.jsx` (Restaurants tab) is the reference: search, pagination in the URL, `QueryState`, `DataTable`.
+
+The web app reloads in the browser when you save a file.
+
+### Making a route real (Member B)
+
+1. Open the route file in `api/src/routes/`. Each `MOCK` route has a `TODO` describing the query.
+2. Follow `restaurants.js` (PostgreSQL list) or `reviews.js` (MongoDB pipeline). Use `$1` placeholders, never string-built SQL.
+3. Use `withTransaction()` from `api/src/db/postgres.js` when several statements must succeed together (checkout).
+4. Throw `ApiError` (or let PostgreSQL errors reach `lib/errors.js`) instead of sending error responses by hand.
+5. Remove the `sendMock` call, and change the route's status to `REAL` in `docs/api_endpoints.md`.
+6. Add a test in `api/tests/`.
+
+The API restarts when you save a file.
+
+### Changing the database (Member A)
+
+1. Edit the scripts in `sql/`, `mongo/` or `data_generation/`.
+2. Apply them with `docker compose run --rm seed`, or `docker compose run --rm -e RESET=1 seed` if tables or seed data changed.
+3. Record the change and the reason in [Changes to the Inherited Code](#changes-to-the-inherited-code) and in `docs/handover_note.md`.
+4. Tell the team to run the same seed command after they pull.
+
+### Adding an npm package
+
+Run it inside the container so `package.json` and `package-lock.json` update together:
+
+```bash
+docker compose exec web npm install some-package
+docker compose exec api npm install some-package
+```
+
+Commit both files. If `package-lock.json` has a merge conflict, don't edit it by hand: take the version from `main`, then run the install command again.
+
+### Running the API or web app outside Docker (optional)
+
+If you have Node.js 20 or later, you can run the API and web app directly for faster reloads. Keep the databases in Docker:
+
+```bash
+docker compose up -d postgres mongo seed     # databases only
+docker compose stop api web                  # free ports 4000 and 5173 if they were running
+
+cd api && npm install && npm run dev         # terminal 1
+cd web && npm install && npm run dev         # terminal 2
+```
+
+The defaults in `api/src/config.js` already point at the Docker databases on ports 15432 and 37017.
+
+### Tests
+
+```bash
+docker compose exec api npm test   # API: error mapping (unit) + endpoints against the seeded databases
+docker compose exec web npm test   # Web: component tests with Testing Library
+```
+
+### Git workflow
+
+- Never commit straight to `main`. Make a branch per task: `git checkout -b feature/checkout-form`.
+- Pull `main` at least once a day: `git pull origin main`, then merge it into your branch.
+- Open a pull request into `main`; another member reviews it before merging.
+- Commit messages say what changed: "Add wallet date filter", not "update".
+
+## Project Structure
+
+```text
+ssd_assignment_1b/
+├── README.md
+├── docker-compose.yml           # postgres, mongo, seed, api, web (+ adminer, mongo-express)
+├── .env.example                 # copy to .env to change ports / seed size
+├── docker/seed/                 # seed image + script (runs sql/, mongo/, data_generation/)
+├── docs/
+│   ├── handover_note.md         # what we inherited, what we fixed
+│   ├── api_endpoints.md         # API contract (shapes, errors, REAL/MOCK status)
+│   └── design/                  # users, wireframes, visual language
+├── sql/  mongo/  data_generation/  performance/   # from Assignment 1 (+ our fixes)
+├── api/                         # Express API
+│   ├── src/
+│   │   ├── app.js               # builds the Express app
+│   │   ├── index.js             # starts the server
+│   │   ├── config.js            # DB connection settings (env vars)
+│   │   ├── db/                  # postgres.js (pool, withTransaction), mongo.js
+│   │   ├── lib/                 # errors.js (friendly DB errors), pagination.js
+│   │   ├── middleware/          # error handler
+│   │   ├── routes/              # one file per area
+│   │   └── mocks.js             # sample data for routes not built yet
+│   └── tests/
+└── web/                         # React + Vite front end
+    └── src/
+        ├── api/                 # client.js (fetch wrapper), endpoints.js (one function per endpoint)
+        ├── components/          # Layout, ActorSwitcher
+        │   └── ui/              # shared components: Button, Card, DataTable, QueryState, ...
+        ├── context/             # ActorContext ("acting as" for the demo)
+        ├── hooks/  lib/         # useDebouncedValue, formatting helpers
+        ├── pages/               # one file per screen
+        └── styles/              # tokens.css (design tokens), base.css, components.css
+```
+
+## Tech Choices
+
+| Choice | Why |
+| --- | --- |
+| **Node.js + Express** for the API | One language (JavaScript) across API and UI, so any member can work on either. Express is small and well known. The API stays thin: the database does the real work through procedures, triggers, views and pipelines. |
+| **`pg` and the official `mongodb` driver** | Direct, parameterised SQL and native aggregation pipelines, with no ORM hiding what runs. |
+| **React + Vite** | Widely known, fast dev server with instant reload, simple build. |
+| **TanStack Query** | Handles loading, error, caching and polling (`refetchInterval` for the map) with little code. |
+| **React Router** | Each screen has its own URL, so pages and filters can be bookmarked and the back button works. |
+| **Recharts** | React-friendly charts for the revenue trend and review breakdowns. |
+| **Leaflet + react-leaflet with OpenStreetMap** | Free map tiles with no API key, so anyone can run the project. |
+| **Plain CSS with design tokens** | No extra framework to learn. Shared variables keep the look consistent across screens built by different people. |
+| **Vitest, Supertest, Testing Library** | One test runner for API and web; tests run against the real seeded databases. |
+| **Docker Compose** | One command starts the whole system with identical data on every machine. |
+
+## Assumptions
+
+1. There is no real login. The "Acting as" switcher in the header picks the customer, restaurant or dispatcher role for the demo.
+2. Prices are in Indian rupees (₹).
+3. The checkout total is calculated in the browser from the menu; `sp_execute_checkout` charges that amount. The procedure does not check prices against the menu.
+4. Orders move only forward: Preparing → Delivering → Delivered. There is no cancellation, because the inherited schema has no such status.
+5. _Add more as you make decisions._
+
+## Changes to the Inherited Code
+
+| Change | Files | Why |
+| --- | --- | --- |
+| Docker development environment | `docker-compose.yml`, `docker/seed/`, `.env.example`, `.dockerignore` | One command gives everyone the same databases and seeded data. |
+| Unix line endings for shell scripts | `.gitattributes` | The seed script must run in Linux containers when checked out on Windows. |
+| README restructured | `README.md` | Added setup, team workflow and Assignment 2 sections; Assignment 1 text kept unchanged below. |
+| _Member A: add each SQL / seeder fix here_ | | |
+
+## Contribution
+
+| Member | Roll number | Contribution |
+| --- | --- | --- |
+| A | | |
+| B | | |
+| C | | |
+| D | | |
+
+---
+
+# Assignment 1 Documentation (inherited)
+
+Everything below is the original Assignment 1 README, kept as it was. Where it differs from the sections above (for example, setup steps), the sections above are current.
 
 ## 1. Project Objectives
 

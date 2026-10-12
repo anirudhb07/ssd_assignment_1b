@@ -1,11 +1,13 @@
 # BiteStream development environment.
 #
-#   docker compose up -d                      start databases + seed (first run loads data)
+#   docker compose up -d                      start everything (first run loads data)
 #   docker compose run --rm -e RESET=1 seed   wipe both databases and reseed
 #   docker compose --profile tools up -d      also start Adminer + mongo-express
 #
-# Host ports default to 15432 / 37017 so they do not clash with a locally
-# installed PostgreSQL / MongoDB. Override them in .env (see .env.example).
+# Web app: http://localhost:5173   API: http://localhost:4000/api
+# Host ports default to 15432 / 37017 for the databases so they do not clash
+# with a locally installed PostgreSQL / MongoDB. Override any port in .env
+# (see .env.example).
 
 name: bitestream
 
@@ -71,6 +73,47 @@ services:
     command: ["bash", "/work/seed.sh"]
     restart: "no"
 
+  # Express API with auto-restart on file changes. Your ./api folder is
+  # mounted in; node_modules lives in a Docker volume so it never clashes
+  # with a node_modules you may have installed on your own machine.
+  api:
+    image: node:24-alpine
+    working_dir: /app
+    command: sh -c "npm install --no-audit --no-fund && npm run dev"
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+    environment:
+      PORT: 4000
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: bitestream
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      MONGO_URI: mongodb://mongo:27017
+      MONGO_DB: bitestream
+    volumes:
+      - ./api:/app
+      - api_node_modules:/app/node_modules
+    ports:
+      - "${API_HOST_PORT:-4000}:4000"
+
+  # React app (Vite dev server with hot reload). /api calls are proxied to
+  # the api service.
+  web:
+    image: node:24-alpine
+    working_dir: /app
+    command: sh -c "npm install --no-audit --no-fund && npm run dev"
+    depends_on: [api]
+    environment:
+      API_PROXY_TARGET: http://api:4000
+      CHOKIDAR_USEPOLLING: ${WEB_POLLING:-false}
+    volumes:
+      - ./web:/app
+      - web_node_modules:/app/node_modules
+    ports:
+      - "${WEB_HOST_PORT:-5173}:5173"
+
   adminer:
     image: adminer:4
     profiles: ["tools"]
@@ -93,3 +136,5 @@ services:
 volumes:
   pgdata:
   mongodata:
+  api_node_modules:
+  web_node_modules:
