@@ -1,6 +1,8 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import { listRestaurants, listUsers } from '../api/endpoints.js';
 import { useActor } from '../context/ActorContext.jsx';
+import { useDebouncedValue } from '../hooks/useDebouncedValue.js';
 
 const ROLES = [
   { value: 'customer', label: 'Customer' },
@@ -9,26 +11,8 @@ const ROLES = [
 ];
 
 // Header control for switching who you are acting as during the demo.
-// TODO (Member B): the lists show the first 20 records only. Add a search
-// box (useDebouncedValue + the `search` param) so any user can be picked.
 export function ActorSwitcher() {
   const { actor, setRole, setUser, setRestaurant } = useActor();
-
-  const users = useQuery({
-    queryKey: ['actor-users'],
-    queryFn: () => listUsers({ pageSize: 20 }),
-    enabled: actor.role === 'customer',
-  });
-  const restaurants = useQuery({
-    queryKey: ['actor-restaurants'],
-    queryFn: () => listRestaurants({ pageSize: 20 }),
-    enabled: actor.role === 'manager',
-  });
-
-  const pick = (list, id) => {
-    const found = list?.items.find((x) => x.id === id);
-    return found ? { id: found.id, name: found.name } : null;
-  };
 
   return (
     <div className="row small">
@@ -40,34 +24,57 @@ export function ActorSwitcher() {
       </label>
 
       {actor.role === 'customer' && (
-        <select
-          className="select"
-          aria-label="Customer"
-          value={actor.user?.id ?? ''}
-          onChange={(e) => setUser(pick(users.data, e.target.value))}
-        >
-          <option value="">{users.isPending ? 'Loading…' : 'Choose a customer'}</option>
-          {actor.user && !users.data?.items.some((u) => u.id === actor.user.id) && (
-            <option value={actor.user.id}>{actor.user.name}</option>
-          )}
-          {users.data?.items.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-        </select>
+        <Picker noun="customer" placeholder="Search customers" fetchList={listUsers} selected={actor.user} onSelect={setUser} />
       )}
-
       {actor.role === 'manager' && (
-        <select
-          className="select"
-          aria-label="Restaurant"
-          value={actor.restaurant?.id ?? ''}
-          onChange={(e) => setRestaurant(pick(restaurants.data, e.target.value))}
-        >
-          <option value="">{restaurants.isPending ? 'Loading…' : 'Choose a restaurant'}</option>
-          {actor.restaurant && !restaurants.data?.items.some((r) => r.id === actor.restaurant.id) && (
-            <option value={actor.restaurant.id}>{actor.restaurant.name}</option>
-          )}
-          {restaurants.data?.items.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-        </select>
+        <Picker noun="restaurant" placeholder="Search restaurants" fetchList={listRestaurants} selected={actor.restaurant} onSelect={setRestaurant} />
       )}
     </div>
+  );
+}
+
+// A search box that narrows a dropdown of up to 20 matches, so any of the
+// 10,000 customers or 500 restaurants can be picked. The current choice
+// stays listed even when it isn't among the matches.
+function Picker({ noun, placeholder, fetchList, selected, onSelect }) {
+  const [search, setSearch] = useState('');
+  const debounced = useDebouncedValue(search);
+  const list = useQuery({
+    queryKey: ['actor-picker', noun, debounced],
+    queryFn: () => fetchList({ search: debounced, pageSize: 20 }),
+    placeholderData: keepPreviousData,
+  });
+  const items = list.data?.items ?? [];
+
+  const firstOption = list.isPending ? 'Loading…'
+    : list.isError ? `Couldn’t load ${noun}s`
+    : items.length ? `Choose a ${noun}`
+    : 'No matches';
+
+  return (
+    <>
+      <input
+        className="input"
+        type="search"
+        aria-label={placeholder}
+        placeholder={placeholder}
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        style={{ width: '10rem' }}
+      />
+      <select
+        className="select"
+        aria-label={`Choose a ${noun}`}
+        value={selected?.id ?? ''}
+        onChange={(e) => {
+          const found = items.find((x) => x.id === e.target.value);
+          onSelect(found ? { id: found.id, name: found.name } : null);
+        }}
+      >
+        <option value="">{firstOption}</option>
+        {selected && !items.some((x) => x.id === selected.id) && <option value={selected.id}>{selected.name}</option>}
+        {items.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+      </select>
+    </>
   );
 }
