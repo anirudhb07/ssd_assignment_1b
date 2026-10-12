@@ -1,94 +1,71 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
-import { listRestaurants } from '../api/endpoints.js';
-import { DataTable, PageHeader, Pagination, QueryState, ScreenPlaceholder, Tabs, TextField } from '../components/ui/index.js';
+import { useNavigate } from 'react-router';
+import { listOrders, listRestaurants, listUsers } from '../api/endpoints.js';
+import {
+  Button, DataTable, PageHeader, Pagination, QueryState, SelectField, StatusBadge, Tabs, TextField,
+} from '../components/ui/index.js';
 import { useDebouncedValue } from '../hooks/useDebouncedValue.js';
+import { useListParams } from '../hooks/useListParams.js';
+import { formatDateTime, formatMoney } from '../lib/format.js';
 
 const TABS = [
   { value: 'restaurants', label: 'Restaurants' },
   { value: 'users', label: 'Users' },
   { value: 'orders', label: 'Orders' },
 ];
+const PAGE_SIZE = 20;
 
 export function BrowsePage() {
-  const [params, setParams] = useSearchParams();
+  const { params, update } = useListParams();
   const tab = params.get('tab') ?? 'restaurants';
 
   return (
     <>
       <PageHeader title="Browse" description="Look up any user, restaurant or order." />
-      <Tabs tabs={TABS} value={tab} onChange={(value) => setParams({ tab: value })} />
+      {/* Switching tab drops the other tab's page and filters. */}
+      <Tabs tabs={TABS} value={tab} onChange={(value) => update({ tab: value, page: null, search: null, status: null, userId: null, restaurantId: null })} />
       {tab === 'restaurants' && <RestaurantsTab />}
-      {tab === 'users' && (
-        <ScreenPlaceholder
-          owner="Member B"
-          todo={[
-            'Same pattern as the Restaurants tab: search by name, paginated table.',
-            'Columns: name, wallet balance, active order (if any).',
-            'Clicking a row opens /browse/users/:id.',
-          ]}
-          endpoints={['listUsers', 'getUser']}
-        />
-      )}
-      {tab === 'orders' && (
-        <ScreenPlaceholder
-          owner="Member B"
-          todo={[
-            'Paginated table, newest first. Never load all 120k orders.',
-            'Filters: status (StatusBadge), customer, restaurant.',
-            'Clicking a row opens /browse/orders/:id, which has the "Advance status" button.',
-          ]}
-          endpoints={['listOrders', 'getOrder', 'advanceOrder']}
-        />
-      )}
+      {tab === 'users' && <UsersTab />}
+      {tab === 'orders' && <OrdersTab />}
     </>
   );
 }
 
-// REFERENCE SCREEN. Copy this pattern for other lists:
-// search box (debounced) + server-side pagination + QueryState for
-// loading/empty/error + DataTable. Page and search live in the URL so
-// the back button and shared links work.
-function RestaurantsTab() {
-  const [params, setParams] = useSearchParams();
-  const navigate = useNavigate();
-  const page = Number(params.get('page') ?? 1);
+// A search box whose text is kept in the URL (?search=) and sent to the API
+// once typing pauses. Used by the Restaurants and Users tabs.
+function useSearch() {
+  const { params, update } = useListParams();
   const [search, setSearch] = useState(params.get('search') ?? '');
-  const debouncedSearch = useDebouncedValue(search);
-  const pageSize = 20;
+  const debounced = useDebouncedValue(search);
+  const onChange = (e) => {
+    setSearch(e.target.value);
+    update({ search: e.target.value, page: null }, { replace: true });
+  };
+  return { search, debounced, onChange };
+}
+
+// REFERENCE SCREEN. The pattern every list follows: search or filters in the
+// URL + server-side pagination + QueryState for loading/empty/error + DataTable.
+function RestaurantsTab() {
+  const { page, update } = useListParams();
+  const navigate = useNavigate();
+  const { search, debounced, onChange } = useSearch();
 
   const query = useQuery({
-    queryKey: ['restaurants', { page, pageSize, search: debouncedSearch }],
-    queryFn: () => listRestaurants({ page, pageSize, search: debouncedSearch }),
+    queryKey: ['restaurants', { page, pageSize: PAGE_SIZE, search: debounced }],
+    queryFn: () => listRestaurants({ page, pageSize: PAGE_SIZE, search: debounced }),
     placeholderData: keepPreviousData, // keep the old page visible while the next one loads
   });
 
-  const updateParams = (changes) => {
-    const next = new URLSearchParams(params);
-    for (const [k, v] of Object.entries(changes)) {
-      if (v === '' || v == null) next.delete(k);
-      else next.set(k, v);
-    }
-    setParams(next);
-  };
-
   return (
     <div className="stack">
-      <TextField
-        label="Search restaurants"
-        placeholder="e.g. Restaurant-12"
-        value={search}
-        onChange={(e) => {
-          setSearch(e.target.value);
-          updateParams({ search: e.target.value, page: null });
-        }}
-      />
+      <TextField id="restaurants-search" label="Search restaurants" placeholder="e.g. Restaurant-12" value={search} onChange={onChange} />
       <QueryState
         query={query}
         isEmpty={(d) => d.items.length === 0}
         emptyTitle="No restaurants found"
-        emptyMessage={debouncedSearch ? `Nothing matches “${debouncedSearch}”.` : undefined}
+        emptyMessage={debounced ? `Nothing matches “${debounced}”.` : undefined}
       >
         {(data) => (
           <>
@@ -101,7 +78,121 @@ function RestaurantsTab() {
               rows={data.items}
               onRowClick={(r) => navigate(`/browse/restaurants/${r.id}`)}
             />
-            <Pagination page={data.page} pageSize={data.pageSize} total={data.total} onPageChange={(p) => updateParams({ page: p })} />
+            <Pagination page={data.page} pageSize={data.pageSize} total={data.total} onPageChange={(p) => update({ page: p })} />
+          </>
+        )}
+      </QueryState>
+    </div>
+  );
+}
+
+function UsersTab() {
+  const { page, update } = useListParams();
+  const navigate = useNavigate();
+  const { search, debounced, onChange } = useSearch();
+
+  const query = useQuery({
+    queryKey: ['users', { page, pageSize: PAGE_SIZE, search: debounced }],
+    queryFn: () => listUsers({ page, pageSize: PAGE_SIZE, search: debounced }),
+    placeholderData: keepPreviousData,
+  });
+
+  return (
+    <div className="stack">
+      <TextField id="users-search" label="Search customers" placeholder="e.g. User-1a2b" value={search} onChange={onChange} />
+      <QueryState
+        query={query}
+        isEmpty={(d) => d.items.length === 0}
+        emptyTitle="No customers found"
+        emptyMessage={debounced ? `Nothing matches “${debounced}”.` : undefined}
+      >
+        {(data) => (
+          <>
+            <DataTable
+              columns={[
+                { key: 'name', header: 'Name' },
+                { key: 'walletBalance', header: 'Wallet balance', numeric: true, render: (u) => formatMoney(u.walletBalance) },
+              ]}
+              rows={data.items}
+              onRowClick={(u) => navigate(`/browse/users/${u.id}`)}
+            />
+            <Pagination page={data.page} pageSize={data.pageSize} total={data.total} onPageChange={(p) => update({ page: p })} />
+          </>
+        )}
+      </QueryState>
+    </div>
+  );
+}
+
+const STATUS_OPTIONS = [
+  { value: 'PREPARING', label: 'Preparing' },
+  { value: 'DELIVERING', label: 'Delivering' },
+  { value: 'DELIVERED', label: 'Delivered' },
+];
+
+// Newest first. Filters: status (dropdown), and customer or restaurant when
+// arriving from a detail page link such as /browse?tab=orders&userId=<id>.
+function OrdersTab() {
+  const { params, page, update } = useListParams();
+  const navigate = useNavigate();
+  const status = params.get('status') ?? '';
+  const userId = params.get('userId') ?? '';
+  const restaurantId = params.get('restaurantId') ?? '';
+  const filters = { status, userId, restaurantId };
+
+  const query = useQuery({
+    queryKey: ['orders', { page, pageSize: PAGE_SIZE, ...filters }],
+    queryFn: () => listOrders({ page, pageSize: PAGE_SIZE, ...filters }),
+    placeholderData: keepPreviousData,
+  });
+
+  // Name the customer or restaurant being filtered on, from the rows themselves.
+  const first = query.data?.items[0];
+  const scope = [
+    userId && `customer ${first?.userName ?? ''}`.trim(),
+    restaurantId && `restaurant ${first?.restaurantName ?? ''}`.trim(),
+  ].filter(Boolean).join(' at ');
+
+  return (
+    <div className="stack">
+      <div className="row" style={{ alignItems: 'end' }}>
+        <SelectField
+          id="orders-status"
+          label="Status"
+          placeholder="All statuses"
+          options={STATUS_OPTIONS}
+          value={status}
+          onChange={(e) => update({ status: e.target.value, page: null })}
+        />
+      </div>
+      {scope && (
+        <div className="alert alert--info row" style={{ justifyContent: 'space-between' }}>
+          <span>Showing orders for {scope}.</span>
+          <Button variant="secondary" onClick={() => update({ userId: null, restaurantId: null, page: null })}>
+            Show all orders
+          </Button>
+        </div>
+      )}
+      <QueryState
+        query={query}
+        isEmpty={(d) => d.items.length === 0}
+        emptyTitle="No orders found"
+        emptyMessage={status || scope ? 'No orders match these filters.' : undefined}
+      >
+        {(data) => (
+          <>
+            <DataTable
+              columns={[
+                { key: 'createdAt', header: 'Placed', render: (o) => formatDateTime(o.createdAt) },
+                { key: 'userName', header: 'Customer' },
+                { key: 'restaurantName', header: 'Restaurant' },
+                { key: 'totalAmount', header: 'Amount', numeric: true, render: (o) => formatMoney(o.totalAmount) },
+                { key: 'status', header: 'Status', render: (o) => <StatusBadge status={o.status} /> },
+              ]}
+              rows={data.items}
+              onRowClick={(o) => navigate(`/browse/orders/${o.id}`)}
+            />
+            <Pagination page={data.page} pageSize={data.pageSize} total={data.total} onPageChange={(p) => update({ page: p })} />
           </>
         )}
       </QueryState>
