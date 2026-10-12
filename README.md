@@ -144,6 +144,7 @@ Copy `.env.example` to `.env` and edit the values. `.env` is git-ignored, so you
 | Seed container exited with an error | Run `docker compose logs seed` to see which script failed. |
 | Seed fails with `$'\r': command not found` (Windows) | `docker/seed/seed.sh` has Windows line endings. Pull the latest `main` (it includes `.gitattributes`), then run `rm docker/seed/seed.sh` and `git checkout -- docker/seed/seed.sh` to get a copy with Unix line endings. |
 | Saving a file doesn't reload the web app (Windows) | Set `WEB_POLLING=true` in `.env`, then `docker compose up -d web`. |
+| The app shows old data or mock data after `git checkout` or `git pull` (e.g. a route marked REAL still sends the `X-Mock` header) | The API's auto-restart can fire halfway through a branch switch and load a mix of old and new files. Run `docker compose restart api` (and `docker compose restart web` if a screen looks out of date). |
 | Data looks wrong or half-loaded | Run `docker compose run --rm -e RESET=1 seed`. |
 
 ## Working on Your Part
