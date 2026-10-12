@@ -36,15 +36,15 @@ The mapping from PostgreSQL errors lives in `api/src/lib/errors.js`.
 | Method & path | Status | Backed by | Screen |
 | --- | --- | --- | --- |
 | `GET /health` | REAL | `SELECT 1`, Mongo `ping` | Home |
-| `GET /users` | MOCK | `users` | Browse, actor switcher |
-| `GET /users/:id` | MOCK | `users`, `orders` | Browse detail |
+| `GET /users` | REAL | `users` | Browse, actor switcher |
+| `GET /users/:id` | REAL | `users`, `orders` | Browse detail |
 | `GET /users/:id/audit` | MOCK | `wallet_audit_logs` | Wallet |
 | `POST /users/:id/topup` | MOCK | `sp_wallet_topup` (to add) | Checkout |
 | `GET /restaurants` | REAL | `restaurants` | Browse, actor switcher |
-| `GET /restaurants/:id` | MOCK | `restaurants`, `restaurant_order_summary` | Browse detail |
+| `GET /restaurants/:id` | REAL | `restaurants`, `restaurant_order_summary` | Browse detail |
 | `GET /restaurants/:id/menu` | MOCK | Mongo `Menus` | Checkout, Reviews |
-| `GET /orders` | MOCK | `orders` | Browse |
-| `GET /orders/:id` | MOCK | `orders` | Browse detail |
+| `GET /orders` | REAL | `orders` | Browse |
+| `GET /orders/:id` | REAL | `orders` | Browse detail |
 | `POST /orders/:id/advance` | MOCK | `sp_advance_order_status` (to add) | Browse detail |
 | `POST /checkout` | MOCK | `sp_execute_checkout` | Checkout |
 | `GET /analytics/revenue` | MOCK | Window query, `sql/06` | Analytics |
@@ -89,7 +89,7 @@ The Mongo `Menus` document:
 `{ "id", "userId", "userName", "restaurantId", "restaurantName", "totalAmount", "status": "PREPARING" | "DELIVERING" | "DELIVERED", "createdAt" }`
 
 ### `GET /orders?userId=&restaurantId=&status=&page=&pageSize=`
-All filters optional. Newest first. Item: Order.
+All filters optional; they combine with AND. `status` is case-insensitive; any other value returns 400 `BAD_REQUEST`. Newest first (`created_at`, then `id`, both descending). Item: Order.
 
 ### `GET /orders/:id`
 Order.

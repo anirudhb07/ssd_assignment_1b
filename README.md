@@ -165,8 +165,8 @@ Each member owns one workflow end to end: the database fix, the API routes and t
 
 | Member | Owns | Database | API routes (`api/src/routes/`) | Screens (`web/src/pages/`) |
 | --- | --- | --- | --- | --- |
-| A | Checkout (Workflow 1) | Add `sp_advance_order_status` and `sp_wallet_topup` (fix 5) · `sql/07_*.sql` | `POST /checkout`, `POST /orders/:id/advance`, `POST /users/:id/topup`, `GET /users/:id` | `CheckoutPage`, order detail with "Advance status" in `DetailPage` |
-| B | Browse & Wallet | Fix 2: audit row ordering (trigger, `seq` column, backdated seed rows) · `sql/08_*.sql`, `postgres_seeder.py` | `GET /users`, `/orders`, `/orders/:id`, `/restaurants/:id`, `/users/:id/audit` | `BrowsePage` (Users, Orders tabs), user and restaurant detail in `DetailPage`, `WalletPage`, search in `ActorSwitcher` |
+| A | Checkout (Workflow 1) | Add `sp_advance_order_status` and `sp_wallet_topup` (fix 5) · `sql/07_*.sql` | `POST /checkout`, `POST /orders/:id/advance`, `POST /users/:id/topup` | `CheckoutPage`, order detail with "Advance status" in `DetailPage` |
+| B | Browse & Wallet | Fix 2: audit row ordering (trigger, `seq` column, backdated seed rows) · `sql/08_*.sql`, `postgres_seeder.py` | `GET /users`, `/users/:id`, `/orders`, `/orders/:id`, `/restaurants/:id`, `/users/:id/audit` | `BrowsePage` (Users, Orders tabs), user and restaurant detail in `DetailPage`, `WalletPage`, search in `ActorSwitcher` |
 | C | Analytics & Reviews (Workflows 2, 4) | Fix 1: link Mongo data to Postgres; per-restaurant window view (`RANGE '6 days'`); refresh log for the materialized view (fix 5) · `sql/09_*.sql`, `mongo_seeder.py` | `/analytics/*`, `GET /restaurants/:id/menu` | `AnalyticsPage`, `ReviewsPage` |
 | D | Map (Workflow 3) & release | Fix 3: ping simulator; fix 4: `$geoNear` per driver · `sql/10_*.sql` if needed, `mongo/`, new `data_generation/ping_simulator.py` | `GET /drivers/nearby` | `MapPage` |
 
@@ -182,7 +182,7 @@ Every endpoint in `docs/api_endpoints.md` already answers. Routes marked `MOCK` 
 
 - Mock responses carry the header `X-Mock: true`, and the browser console logs `[mock data] GET /users`.
 - Checkout's mock can show both failures: an amount over 5000 returns `402 INSUFFICIENT_BALANCE`, and `?simulate=active-order` returns `409 ACTIVE_ORDER_EXISTS`.
-- Real so far: `GET /health`, `GET /restaurants`, `GET /reviews/stats`.
+- Real so far: `GET /health`, `GET /users`, `GET /users/:id`, `GET /orders`, `GET /orders/:id`, `GET /restaurants`, `GET /restaurants/:id`, `GET /reviews/stats`.
 
 ### Building a screen
 
@@ -319,6 +319,7 @@ ssd_assignment_1b/
 | Unix line endings for shell scripts | `.gitattributes` | The seed script must run in Linux containers when checked out on Windows. |
 | README restructured | `README.md` | Added setup, team workflow and Assignment 2 sections; Assignment 1 text kept unchanged below. |
 | Seed runs every numbered SQL file (except `06`) | `docker/seed/seed.sh` | So new scripts (`sql/07`–`10`) are applied without editing the seed. |
+| Index `idx_orders_created_at` on `orders(created_at DESC, id DESC)` | `sql/08_orders_recent_index.sql` | Browse lists orders newest first. Without it every page scanned and sorted all 120,000 orders (128 ms); with it, 1.5 ms. |
 | _Whoever makes a fix: add it here_ | | |
 
 ## Contribution
