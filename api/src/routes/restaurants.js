@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { query } from '../db/postgres.js';
+import { notFound } from '../lib/errors.js';
 import { paged, parsePagination } from '../lib/pagination.js';
-import { menu, restaurant, sendMock } from '../mocks.js';
+import { menu, sendMock } from '../mocks.js';
 
 export const restaurantsRouter = Router();
 
@@ -29,10 +30,24 @@ restaurantsRouter.get('/', async (req, res) => {
   res.json(paged(rows.rows, count.rows[0].total, { page, pageSize }));
 });
 
-// GET /api/restaurants/:id  — MOCK. TODO (Member B): read restaurants +
-// restaurant_order_summary for this id; 404 if missing.
-restaurantsRouter.get('/:id', (req, res) => {
-  sendMock(res, { ...restaurant, id: req.params.id, summary: { completedOrderCount: 240, completedRevenue: 354950 } });
+// GET /api/restaurants/:id — REAL.
+// Totals come from the materialized view restaurant_order_summary, so they
+// are as fresh as its last refresh (Analytics has the Refresh button).
+restaurantsRouter.get('/:id', async (req, res) => {
+  const result = await query(
+    `SELECT r.id, r.name, r.latitude, r.longitude,
+            s.completed_order_count AS "completedOrderCount",
+            s.completed_revenue     AS "completedRevenue"
+       FROM restaurants r
+       LEFT JOIN restaurant_order_summary s ON s.restaurant_id = r.id
+      WHERE r.id = $1`,
+    [req.params.id],
+  );
+  if (result.rowCount === 0) throw notFound('That restaurant');
+
+  const { completedOrderCount, completedRevenue, ...restaurant } = result.rows[0];
+  // A restaurant added after the last refresh isn't in the view yet.
+  res.json({ ...restaurant, summary: { completedOrderCount: completedOrderCount ?? 0, completedRevenue: completedRevenue ?? 0 } });
 });
 
 // GET /api/restaurants/:id/menu — MOCK. TODO (Member C): Menus.findOne({ restaurantId }).

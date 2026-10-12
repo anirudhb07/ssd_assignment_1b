@@ -1,17 +1,46 @@
 import { Router } from 'express';
-import { auditEntry, auditLog, order, sendMock, users } from '../mocks.js';
+import { ACTIVE_STATUSES, ORDER_SELECT } from '../db/orders.js';
+import { query } from '../db/postgres.js';
+import { notFound } from '../lib/errors.js';
+import { paged, parsePagination } from '../lib/pagination.js';
+import { auditEntry, auditLog, sendMock, users } from '../mocks.js';
 
 export const usersRouter = Router();
 
-// GET /api/users?search=&page=&pageSize= — MOCK.
-// TODO (Member B): copy the pattern in routes/restaurants.js.
-usersRouter.get('/', (req, res) => {
-  sendMock(res, { items: users, page: 1, pageSize: 20, total: users.length });
+// GET /api/users?search=&page=&pageSize= — REAL.
+// Same pattern as GET /api/restaurants: optional name search, one page.
+usersRouter.get('/', async (req, res) => {
+  const { page, pageSize, offset } = parsePagination(req.query);
+  const search = String(req.query.search ?? '').trim();
+
+  const where = search ? 'WHERE name ILIKE $1' : '';
+  const params = search ? [`%${search}%`] : [];
+
+  const [rows, count] = await Promise.all([
+    query(
+      `SELECT id, name, wallet_balance AS "walletBalance"
+         FROM users ${where}
+        ORDER BY name, id
+        LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+      [...params, pageSize, offset],
+    ),
+    query(`SELECT COUNT(*) AS total FROM users ${where}`, params),
+  ]);
+
+  res.json(paged(rows.rows, count.rows[0].total, { page, pageSize }));
 });
 
-// GET /api/users/:id — MOCK. TODO (Member A): user + their PREPARING/DELIVERING order (or null).
-usersRouter.get('/:id', (req, res) => {
-  sendMock(res, { ...users[0], id: req.params.id, activeOrder: order });
+// GET /api/users/:id — REAL.
+// The customer plus their order in progress (PREPARING or DELIVERING), or
+// null. The partial unique index guarantees there is at most one.
+usersRouter.get('/:id', async (req, res) => {
+  const [user, active] = await Promise.all([
+    query('SELECT id, name, wallet_balance AS "walletBalance" FROM users WHERE id = $1', [req.params.id]),
+    query(`${ORDER_SELECT} WHERE o.user_id = $1 AND o.status = ANY($2) LIMIT 1`, [req.params.id, ACTIVE_STATUSES]),
+  ]);
+  if (user.rowCount === 0) throw notFound('That customer');
+
+  res.json({ ...user.rows[0], activeOrder: active.rows[0] ?? null });
 });
 
 // GET /api/users/:id/audit?from=&to=&page=&pageSize= — MOCK.

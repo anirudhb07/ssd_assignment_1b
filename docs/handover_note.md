@@ -40,6 +40,7 @@ Smaller issues:
 | Added `docker-compose.yml`, `docker/seed/`, `.env.example` | One command gives every team member the same databases and data. The seed step skips when data exists, so it is safe to re-run. |
 | Added `.gitattributes` (`*.sh` with LF endings) | The seed script must keep Unix line endings to run in Linux containers when checked out on Windows. |
 | Seed runs every numbered SQL file (except `06`) | New scripts (`sql/07`–`10`, one per member) are applied without editing the seed or each other's files. |
+| Added index `idx_orders_created_at` (`sql/08_orders_recent_index.sql`) | No index covered “newest orders first”, so each page of the order list scanned and sorted all 120,000 orders: 128 ms per request, down to 1.5 ms with the index. |
 | *(Whoever makes a fix: add it here, with the reason)* | |
 
 ## Suggestions for the original authors
