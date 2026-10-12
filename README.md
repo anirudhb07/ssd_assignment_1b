@@ -148,6 +148,17 @@ Copy `.env.example` to `.env` and edit the values. `.env` is git-ignored, so you
 
 ## Working on Your Part
 
+### Team
+
+Agree who takes which letter, then have **one person** fill in all four rows in a single commit to `main`. If each person edits their own row on a separate branch, Git reports conflicts because the rows sit next to each other. Everything else in this README, the code `TODO`s and the screen placeholders refers to members by letter.
+
+| Member | Name | Roll number | GitHub username | Owns |
+| --- | --- | --- | --- | --- |
+| A | | | | Checkout (Workflow 1) |
+| B | | | | Browse & Wallet |
+| C | | | | Analytics & Reviews (Workflows 2, 4) |
+| D | | | | Map (Workflow 3) & release |
+
 ### Who owns what
 
 Each member owns one workflow end to end: the database fix, the API routes and the screens for it, plus its wireframes (in `docs/design/`), its tests and its part of the demo. Nobody waits on another layer, and everyone does both design and code. The fix numbers refer to "What did not work" in `docs/handover_note.md`.
@@ -312,12 +323,14 @@ ssd_assignment_1b/
 
 ## Contribution
 
-| Member | Roll number | Contribution |
-| --- | --- | --- |
-| A | | |
-| B | | |
-| C | | |
-| D | | |
+Names and roll numbers are in the [Team](#team) table. Before submitting, describe what each member actually did, design and code, so the grader can see the split.
+
+| Member | Contribution |
+| --- | --- |
+| A | |
+| B | |
+| C | |
+| D | |
 
 ---
 

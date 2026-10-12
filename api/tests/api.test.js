@@ -35,8 +35,13 @@ describe('GET /api/restaurants', () => {
   });
 
   it('filters by name', async () => {
-    const res = await request(app).get('/api/restaurants?search=Restaurant-166');
-    expect(res.body.items.map((r) => r.name)).toContain('Restaurant-166');
+    // Search for a restaurant that exists, whatever the seed size.
+    const first = await request(app).get('/api/restaurants?pageSize=1');
+    const { name } = first.body.items[0];
+
+    const res = await request(app).get(`/api/restaurants?search=${encodeURIComponent(name)}`);
+    expect(res.body.items.map((r) => r.name)).toContain(name);
+    expect(res.body.total).toBeLessThan(first.body.total);
   });
 });
 
