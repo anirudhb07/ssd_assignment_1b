@@ -1,6 +1,6 @@
 # Design
 
-Put wireframes in this folder (PNG/PDF exports from Figma, Excalidraw, or photos of hand drawings). Name them by screen, for example `checkout.png`, `map.png`, `checkout-mobile.png`. Each person draws the wireframes for the screens they build.
+Wireframes, users and the visual style for BiteStream. Each person draws the wireframes for the screens they build, starting from the shared kit so every screen looks like part of the same app. See [How to make a wireframe](#how-to-make-a-wireframe).
 
 ## Users
 
@@ -14,14 +14,53 @@ The header's "Acting as" switcher stands in for login, so one person can demo al
 
 ## Screens
 
-| Screen | Owner | Wireframe |
-| --- | --- | --- |
-| Checkout, order detail (Workflow 1) | Member A | `checkout.png` (to add) |
-| Browse (users, restaurants, orders + detail views) | Member B | `browse.png` (to add) |
-| Wallet | Member B | `wallet.png` (to add) |
-| Analytics (Workflow 2) | Member C | `analytics.png` (to add) |
-| Reviews + menu (Workflow 4) | Member C | `reviews.png` (to add) |
-| Map (Workflow 3) | Member D | `map.png` (to add) |
+| Screen | Owner | Issue | Page shape | Wireframe |
+| --- | --- | --- | --- | --- |
+| Checkout (Workflow 1) | Member A | #2 | Dashboard (menu and cart instead of charts) | `checkout.png` (to add) |
+| Order detail with "Advance status" | Member A | #2 | Detail | `checkout.png` (to add) |
+| Browse: users, restaurants, orders | Member B | #1 | List | `browse.png` (to add) |
+| Restaurant and customer detail | Member B | #1 | Detail | `browse.png` (to add) |
+| Wallet | Member B | #1 | List | `wallet.png` (to add) |
+| Analytics (Workflow 2) | Member C | #3 | Dashboard | `analytics.png` (to add) |
+| Reviews + menu (Workflow 4) | Member C | #3 | Dashboard | `reviews.png` (to add) |
+| Map (Workflow 3) | Member D | #4 | Dashboard (map instead of the chart) | `map.png` (to add) |
+
+## How to make a wireframe
+
+Everyone starts from the same kit: [`wireframe-kit.excalidraw`](wireframe-kit.excalidraw) ([preview image](wireframe-kit.png)). It has every shared piece (buttons, fields, tabs, badges, cards, table, page arrows, loading/empty/error states, banners, chart and map placeholders) and three page shapes, each at laptop and phone width:
+
+- **List**: title, search and filters, table, page arrows.
+- **Detail**: back link, title, number cards, details, buttons.
+- **Dashboard**: title, number cards, chart or map areas.
+
+The names under each piece match the React components below, so a wireframe can be built directly from what the code already has.
+
+### Steps
+
+1. Go to [excalidraw.com](https://excalidraw.com), open the menu (☰) → **Open**, and pick `docs/design/wireframe-kit.excalidraw`.
+2. Duplicate the page shape your screen uses (see the table above), at laptop and phone width.
+3. Fill it in by copying pieces from the **Pieces** frame (Ctrl+C, Ctrl+V). Don't draw your own buttons, tables or cards.
+4. Need something the kit doesn't have? Ask the design reviewer to add it to the kit first, so everyone gets the same version.
+5. Keep it grey. Colours are decided in `web/src/styles/tokens.css`, not in wireframes.
+6. Use real sample text: Restaurant-166, User-1a2b3c4d, ₹4,250, 12 Oct, 10:42.
+7. Show the loading, empty and error states where the screen has them.
+8. Delete the kit parts you didn't use, then save as `docs/design/<screen>.excalidraw` (☰ → **Save to…**) and export `docs/design/<screen>.png` (☰ → **Export image**).
+9. On a branch named after the issue (e.g. `des-2-checkout`), open a pull request with `Closes #2` and ask the design reviewer to look.
+
+### Reviewer checklist
+
+The design reviewer checks every wireframe pull request before it's merged, within a few hours so nobody is blocked. Someone else reviews the reviewer's own wireframes.
+
+- [ ] Uses the page shape from the table above.
+- [ ] Uses only pieces from the kit, at the same sizes and spacing.
+- [ ] The top bar is identical to the kit.
+- [ ] Wording matches the other screens: same button names ("Place order", "Advance status"), ₹ for money, dates like "12 Oct, 10:42".
+- [ ] Has a phone version.
+- [ ] Shows loading, empty and error states where they apply.
+- [ ] Grey only.
+- [ ] Both files are there: `<screen>.excalidraw` and `<screen>.png`.
+
+Approve, or comment with what to change. If the reviewer adds a new piece to the kit, they update both `wireframe-kit.excalidraw` and `wireframe-kit.png` and tell the team.
 
 ## Visual language
 
