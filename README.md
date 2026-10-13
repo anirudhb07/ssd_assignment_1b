@@ -183,7 +183,7 @@ Every endpoint in `docs/api_endpoints.md` already answers. Routes marked `MOCK` 
 
 - Mock responses carry the header `X-Mock: true`, and the browser console logs `[mock data] GET /users`.
 - Checkout's mock can show both failures: an amount over 5000 returns `402 INSUFFICIENT_BALANCE`, and `?simulate=active-order` returns `409 ACTIVE_ORDER_EXISTS`.
-- Real so far: `GET /health`, `GET /users`, `GET /users/:id`, `GET /orders`, `GET /orders/:id`, `GET /restaurants`, `GET /restaurants/:id`, `GET /reviews/stats`.
+- Real so far: `GET /health`, `GET /users`, `GET /users/:id`, `GET /users/:id/audit`, `GET /orders`, `GET /orders/:id`, `GET /restaurants`, `GET /restaurants/:id`, `GET /reviews/stats`.
 
 ### Building a screen
 
@@ -311,7 +311,8 @@ ssd_assignment_1b/
 3. The checkout total is calculated in the browser from the menu; `sp_execute_checkout` charges that amount. The procedure does not check prices against the menu.
 4. Orders move only forward: Preparing → Delivering → Delivered. There is no cancellation, because the inherited schema has no such status.
 5. Seeded wallets start at ₹0 and get one opening CREDIT (their starting balance) 30 days ago, before any order, so each customer's audit trail explains their whole balance.
-6. _Add more as you make decisions._
+6. Dates in filters (the Wallet screen's from/to) are Indian calendar days (`Asia/Kolkata`). The database stores UTC; the app shows times in the browser's time zone.
+7. _Add more as you make decisions._
 
 ## Changes to the Inherited Code
 
