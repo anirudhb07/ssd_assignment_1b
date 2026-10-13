@@ -310,7 +310,8 @@ ssd_assignment_1b/
 2. Prices are in Indian rupees (₹).
 3. The checkout total is calculated in the browser from the menu; `sp_execute_checkout` charges that amount. The procedure does not check prices against the menu.
 4. Orders move only forward: Preparing → Delivering → Delivered. There is no cancellation, because the inherited schema has no such status.
-5. _Add more as you make decisions._
+5. Seeded wallets start at ₹0 and get one opening CREDIT (their starting balance) 30 days ago, before any order, so each customer's audit trail explains their whole balance.
+6. _Add more as you make decisions._
 
 ## Changes to the Inherited Code
 
@@ -321,6 +322,7 @@ ssd_assignment_1b/
 | README restructured | `README.md` | Added setup, team workflow and Assignment 2 sections; Assignment 1 text kept unchanged below. |
 | Seed runs every numbered SQL file (except `06`) | `docker/seed/seed.sh` | So new scripts (`sql/07`–`10`) are applied without editing the seed. |
 | Index `idx_orders_created_at` on `orders(created_at DESC, id DESC)` | `sql/08_orders_recent_index.sql` | Browse lists orders newest first. Without it every page scanned and sorted all 120,000 orders (128 ms); with it, 1.5 ms. |
+| Wallet audit rows can be ordered: `seq` column, trigger uses `clock_timestamp()`, seeder dates each row with its order's time | `sql/08_audit_ordering.sql`, `data_generation/postgres_seeder.py` | The trigger used `NOW()` (transaction start) and the seeder ran in one transaction, so all 120,000 audit rows shared one timestamp: no date filter or running balance was possible. Now rows span 30 days and every customer's balances chain by `seq`. `seq` orders rows but can have gaps (rolled-back changes use numbers). After pulling, reseed with `RESET=1`. |
 | _Whoever makes a fix: add it here_ | | |
 
 ## Contribution
