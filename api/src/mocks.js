@@ -44,14 +44,6 @@ export const auditEntry = {
   balanceAfter: 3610,
 };
 
-export const auditLog = Array.from({ length: 8 }, (_, i) => ({
-  id: `cccccccc-cccc-4ccc-8ccc-00000000000${i}`,
-  changedAt: daysAgo(i * 3),
-  actionType: i === 4 ? 'CREDIT' : 'DEBIT',
-  amountChanged: i === 4 ? 5000 : 200 + i * 75,
-  balanceAfter: 4250 + i * 310,
-}));
-
 export const menu = {
   restaurantId: restaurant.id,
   restaurantName: restaurant.name,
