@@ -7,6 +7,11 @@ Generates:
     - 100,000+ orders
     - wallet audit records automatically through the trigger
 
+Wallet history (issue #6): every user starts at 0 and gets one opening
+CREDIT 30 days ago, then one DEBIT per order in time order. Each audit row
+is dated with its order's created_at through the bitestream.audit_at
+setting read by fn_wallet_audit() (sql/08_audit_ordering.sql).
+
 Environment variables:
 
 PGHOST
@@ -29,7 +34,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 import psycopg2
-from psycopg2.extras import execute_values
+from psycopg2.extras import execute_batch, execute_values
 
 
 def get_connection():
@@ -88,6 +93,16 @@ def seed_database(
 
     random.seed(random_seed)
 
+    # One reference time, so every order falls inside the 30-day window
+    # and after the opening credits.
+    now = datetime.now(
+        timezone.utc
+    )
+
+    opening_at = now - timedelta(
+        days=30
+    )
+
     connection = get_connection()
 
     connection.autocommit = False
@@ -120,11 +135,13 @@ def seed_database(
                 )
             )
 
+            # Inserted at 0; the opening CREDIT below brings the wallet
+            # to its starting balance, so the trigger records it.
             users.append(
                 (
                     user_id,
                     f"User-{user_id[:8]}",
-                    balance
+                    Decimal("0")
                 )
             )
 
@@ -153,6 +170,9 @@ def seed_database(
         print(
             f"Users inserted: {len(users):,}"
         )
+
+        # Each user's opening CREDIT. Grows if a user needs a top-up below.
+        opening = dict(balances)
 
 
         # =================================================
@@ -229,174 +249,215 @@ def seed_database(
 
 
         # =================================================
-        # ORDERS
+        # ORDERS (generated in memory first)
         # =================================================
 
         print(
             f"Generating {orders_count:,} orders..."
         )
 
-        inserted_orders = 0
+        orders = []
 
         active_status_users = set()
 
-        while inserted_orders < orders_count:
+        for _ in range(
+            orders_count
+        ):
 
-            current_batch = min(
-                batch_size,
-                orders_count - inserted_orders
+            # Find a user with enough money.
+
+            for _attempt in range(20):
+
+                user_id = random.choice(
+                    user_ids
+                )
+
+                amount = Decimal(
+                    random.randint(
+                        100,
+                        2500
+                    )
+                )
+
+                if (
+                    balances[user_id]
+                    >= amount
+                ):
+                    break
+
+            else:
+
+                # Add credit if necessary. It is folded into the
+                # user's opening CREDIT, which comes before all of
+                # their orders, so the wallet never goes negative
+                # when the orders are applied in time order.
+
+                user_id = random.choice(
+                    user_ids
+                )
+
+                credit = Decimal(
+                    "10000"
+                )
+
+                balances[user_id] += credit
+
+                opening[user_id] += credit
+
+                amount = Decimal(
+                    random.randint(
+                        100,
+                        2500
+                    )
+                )
+
+            if user_id in active_status_users:
+                status = "DELIVERED"
+            else:
+                status = random.choices(
+                    ["DELIVERED", "PREPARING", "DELIVERING"],
+                    weights=[80, 10, 10],
+                    k=1
+                )[0]
+
+                if status != "DELIVERED":
+                    active_status_users.add(user_id)
+
+            balances[user_id] -= amount
+
+
+            order_id = str(
+                uuid.uuid4()
             )
 
-            orders = []
+            restaurant_id = random.choice(
+                restaurant_ids
+            )
 
-            wallet_updates = []
 
+            created_at = (
 
-            for _ in range(
-                current_batch
-            ):
+                now
 
-                # Find a user with enough money.
+                - timedelta(
+                    days=random.randint(
+                        0,
+                        29
+                    ),
 
-                for _attempt in range(20):
-
-                    user_id = random.choice(
-                        user_ids
+                    seconds=random.randint(
+                        0,
+                        86399
                     )
-
-                    amount = Decimal(
-                        random.randint(
-                            100,
-                            2500
-                        )
-                    )
-
-                    if (
-                        balances[user_id]
-                        >= amount
-                    ):
-                        break
-
-                else:
-
-                    # Add credit if necessary.
-
-                    user_id = random.choice(
-                        user_ids
-                    )
-
-                    credit = Decimal(
-                        "10000"
-                    )
-
-                    balances[user_id] += credit
-
-                    cursor.execute(
-
-                        """
-                        UPDATE users
-                        SET wallet_balance =
-                            wallet_balance + %s
-                        WHERE id = %s
-                        """,
-
-                        (
-                            credit,
-                            user_id
-                        )
-                    )
-
-                    amount = Decimal(
-                        random.randint(
-                            100,
-                            2500
-                        )
-                    )
-                if user_id in active_status_users:
-                    status = "DELIVERED"
-                else:
-                    status = random.choices(
-                        ["DELIVERED", "PREPARING", "DELIVERING"],
-                        weights=[80, 10, 10],
-                        k=1
-                    )[0]
-
-                    if status != "DELIVERED":
-                        active_status_users.add(user_id)
-
-                balances[user_id] -= amount
+                )
+            )
 
 
-                wallet_updates.append(
+            orders.append(
+                (
+                    order_id,
+                    user_id,
+                    restaurant_id,
+                    amount,
+                    status,
+                    created_at
+                )
+            )
+
+
+        # Apply orders oldest first, so each user's audit rows get
+        # increasing seq values in the same order as their times.
+
+        orders.sort(
+            key=lambda order: order[5]
+        )
+
+
+        # =================================================
+        # OPENING CREDITS
+        # =================================================
+
+        # One statement; the trigger writes one CREDIT per user,
+        # dated opening_at.
+
+        cursor.execute(
+            "SELECT set_config('bitestream.audit_at', %s, true)",
+            (
+                opening_at.isoformat(),
+            )
+        )
+
+        execute_values(
+
+            cursor,
+
+            """
+            UPDATE users AS u
+            SET wallet_balance = v.balance
+            FROM (VALUES %s) AS v(id, balance)
+            WHERE u.id = v.id
+            """,
+
+            list(opening.items()),
+
+            template="(%s::uuid, %s::numeric)",
+
+            page_size=batch_size
+        )
+
+
+        print(
+            f"Opening credits: {len(opening):,}"
+        )
+
+
+        # =================================================
+        # DEBITS AND ORDERS, OLDEST FIRST
+        # =================================================
+
+        inserted_orders = 0
+
+        for batch in chunks(
+            orders,
+            batch_size
+        ):
+
+            # Each debit is dated with its order's created_at.
+            # set_config(..., true) lasts only until the commit.
+
+            execute_batch(
+
+                cursor,
+
+                """
+                SELECT set_config('bitestream.audit_at', %s, true);
+
+                UPDATE users
+
+                SET wallet_balance =
+                    wallet_balance - %s
+
+                WHERE id = %s
+                """,
+
+                [
                     (
+                        created_at.isoformat(),
                         amount,
                         user_id
                     )
-                )
-
-
-                order_id = str(
-                    uuid.uuid4()
-                )
-
-                restaurant_id = random.choice(
-                    restaurant_ids
-                )
-
-
-                created_at = (
-
-                    datetime.now(
-                        timezone.utc
-                    )
-
-                    - timedelta(
-                        days=random.randint(
-                            0,
-                            29
-                        ),
-
-                        seconds=random.randint(
-                            0,
-                            86399
-                        )
-                    )
-                )
-
-
-                orders.append(
-                    (
-                        order_id,
+                    for (
+                        _order_id,
                         user_id,
-                        restaurant_id,
+                        _restaurant_id,
                         amount,
-                        status,
+                        _status,
                         created_at
-                    )
-                )
+                    ) in batch
+                ],
 
-
-            # Update wallets.
-            # Trigger creates audit rows.
-
-            for amount, user_id in wallet_updates:
-
-                cursor.execute(
-
-                    """
-                    UPDATE users
-
-                    SET wallet_balance =
-                        wallet_balance - %s
-
-                    WHERE id = %s
-                    """,
-
-                    (
-                        amount,
-                        user_id
-                    )
-                )
+                page_size=batch_size
+            )
 
 
             # Insert orders.
@@ -418,11 +479,11 @@ def seed_database(
                 VALUES %s
                 """,
 
-                orders
+                batch
             )
 
 
-            inserted_orders += current_batch
+            inserted_orders += len(batch)
 
 
             if (
