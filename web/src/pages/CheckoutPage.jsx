@@ -36,7 +36,7 @@ function CheckoutSession({ customer }) {
         {(data) => <>
           {data.items.map((entry) => <div className="checkout-line" key={entry.id}>
             <h3>{entry.name}</h3>
-            <p className="muted small">Location: {entry.latitude}, {entry.longitude}</p>
+            <p className="muted small">Location: {entry.latitude.toFixed(4)}, {entry.longitude.toFixed(4)}</p>
             <Button variant="secondary" onClick={() => setRestaurant(entry)} aria-label={`Choose ${entry.name}`}>View menu</Button>
           </div>)}
           <Pagination page={data.page} pageSize={data.pageSize} total={data.total} onPageChange={setPage} />
@@ -49,7 +49,12 @@ function CheckoutSession({ customer }) {
 function RestaurantCheckout({ restaurant, customer, onChangeRestaurant }) {
   const menu = useQuery({ queryKey: ['menu', restaurant.id], queryFn: () => getMenu(restaurant.id) });
   return <>
-    <PageHeader title={restaurant.name} description={<>Location: {restaurant.latitude}, {restaurant.longitude}</>} />
+    <header className="page-header">
+      <div className="page-header__text">
+        <h2>{restaurant.name}</h2>
+        <p className="muted">Location: {restaurant.latitude.toFixed(4)}, {restaurant.longitude.toFixed(4)}</p>
+      </div>
+    </header>
     <QueryState query={menu} isEmpty={(data) => !menuItems(data).length} emptyTitle="No menu items yet" emptyMessage="There is nothing to order from this restaurant yet.">
       {(data) => <MenuAndCart menu={data} restaurant={restaurant} customer={customer} onChangeRestaurant={onChangeRestaurant} />}
     </QueryState>
@@ -91,7 +96,7 @@ function MenuAndCart({ menu, restaurant, customer, onChangeRestaurant }) {
   });
   const credit = useMutation({
     mutationFn: (amount) => topUpWallet(customer.id, amount),
-    onSuccess: () => { setTopup(''); return refreshWallet(); },
+    onSuccess: () => { payment.reset(); setTopup(''); return refreshWallet(); },
   });
   const busy = payment.isPending || credit.isPending;
   const placeOrder = async () => {

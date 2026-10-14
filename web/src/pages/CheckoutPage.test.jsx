@@ -17,7 +17,7 @@ import { ActorProvider, useActor } from '../context/ActorContext.jsx';
 import { CheckoutPage } from './CheckoutPage.jsx';
 
 vi.mock('../api/endpoints.js', () => ({ checkout: vi.fn(), getMenu: vi.fn(), getUser: vi.fn(), listRestaurants: vi.fn(), topUpWallet: vi.fn() }));
-const restaurants = [{ id: 'r1', name: 'Cafe One', latitude: 12, longitude: 77 }, { id: 'r2', name: 'Cafe Two', latitude: 13, longitude: 78 }];
+const restaurants = [{ id: 'r1', name: 'Cafe One', latitude: 13.048384606524099, longitude: 77.71833724119547 }, { id: 'r2', name: 'Cafe Two', latitude: 13, longitude: 78 }];
 const menu = { restaurantId: 'r1', categories: [{ name: 'Snacks', items: [
   { name: 'Tea', price: 0.1, available: true, customizationAddOns: [{ name: 'Milk', price: 0.2 }] },
   { name: 'Toast', price: 0.2, available: true },
@@ -59,6 +59,7 @@ describe('Checkout', () => {
     listRestaurants.mockResolvedValue({ items: restaurants, page: 1, pageSize: 20, total: 40 });
     setup();
     expect(await screen.findByText('Cafe One')).toBeInTheDocument();
+    expect(screen.getByText('Location: 13.0484, 77.7183')).toBeInTheDocument();
     expect(listRestaurants).toHaveBeenCalledWith({ page: 1, pageSize: 20, search: '' });
     await userEvent.click(screen.getByRole('button', { name: 'Next' }));
     await waitFor(() => expect(listRestaurants).toHaveBeenLastCalledWith({ page: 2, pageSize: 20, search: '' }));
@@ -70,6 +71,9 @@ describe('Checkout', () => {
     getMenu.mockResolvedValue(mockMenu);
     setup(); await choose();
     expect(await screen.findByText('Paneer Tikka')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: 'Cafe One' })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+    expect(screen.getByText('Location: 13.0484, 77.7183')).toBeInTheDocument();
     expect(getMenu).toHaveBeenCalledWith('r1');
     expect(screen.getByRole('button', { name: 'Add Veg Spring Roll' })).toBeDisabled();
     await add('Paneer Tikka');
@@ -173,6 +177,7 @@ describe('Checkout', () => {
     expect(screen.getByRole('button', { name: 'Topping up…' })).toBeDisabled();
     await act(async () => pending.resolve(credit));
     expect(await screen.findByText(/Top-up successful/)).toBeInTheDocument();
+    expect(screen.queryByText('Not enough funds. Please top up.')).not.toBeInTheDocument();
     expect(screen.getByText('audit-credit')).toBeInTheDocument();
     expect(topUpWallet).toHaveBeenCalledWith('u1', 100);
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['user', 'u1'] });
