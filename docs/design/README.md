@@ -22,7 +22,7 @@ The header's "Acting as" switcher stands in for login, so one person can demo al
 | Restaurant and customer detail | Member B | #1 | Detail | `browse.png` (to add) |
 | Wallet | Member B | #1 | List | `wallet.png` (to add) |
 | Analytics (Workflow 2) | Member C | #3 | Dashboard | `analytics.png`  |
-| Reviews + menu (Workflow 4) | Member C | #3 | Dashboard | `Reviews.png` |
+| Reviews + menu (Workflow 4) | Member C | #3 | Dashboard | `reviews.png` |
 | Map (Workflow 3) | Member D | #4 | Dashboard (map instead of the chart) | `map.png` (to add) |
 
 ## How to make a wireframe
