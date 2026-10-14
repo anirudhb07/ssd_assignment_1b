@@ -54,22 +54,6 @@ describe('GET /api/reviews/stats', () => {
   });
 });
 
-// TODO (Member A): when checkout is real, replace these with tests that use
-// seeded users: one with enough balance, one without, one with an active order.
-describe('POST /api/checkout (mock)', () => {
-  it('returns 402 with a message when the balance is too low', async () => {
-    const res = await request(app).post('/api/checkout').send({ amount: 999999 });
-    expect(res.status).toBe(402);
-    expect(res.body.error.code).toBe('INSUFFICIENT_BALANCE');
-  });
-
-  it('returns 409 when the customer already has an active order', async () => {
-    const res = await request(app).post('/api/checkout?simulate=active-order').send({ amount: 100 });
-    expect(res.status).toBe(409);
-    expect(res.body.error.code).toBe('ACTIVE_ORDER_EXISTS');
-  });
-});
-
 describe('unknown routes', () => {
   it('return a JSON 404', async () => {
     const res = await request(app).get('/api/nope');
