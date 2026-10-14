@@ -251,7 +251,7 @@ def create_driver_ping(
         - timedelta(
             seconds=random.randint(
                 0,
-                3 * 60 * 60
+                1 * 60 * 60
             )
         )
     )
