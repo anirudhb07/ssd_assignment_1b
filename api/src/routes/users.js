@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import { ACTIVE_STATUSES, ORDER_SELECT } from '../db/orders.js';
-import { query } from '../db/postgres.js';
+import { query, withTransaction } from '../db/postgres.js';
+import { readWalletChange } from '../db/wallet.js';
+import { requireAmount, requireId } from '../lib/checkoutInput.js';
 import { badRequest, notFound } from '../lib/errors.js';
 import { paged, parsePagination } from '../lib/pagination.js';
-import { auditEntry, sendMock, users } from '../mocks.js';
 
 export const usersRouter = Router();
 
@@ -100,12 +101,13 @@ usersRouter.get('/:id/audit', async (req, res) => {
   res.json(paged(rows.rows, count.rows[0].total, { page, pageSize }));
 });
 
-// POST /api/users/:id/topup  { amount } — MOCK.
-// TODO (Member A): add sp_wallet_topup (sql/07) and CALL it here; return new balance + CREDIT row.
-usersRouter.post('/:id/topup', (req, res) => {
-  const amount = Number(req.body?.amount) || 0;
-  sendMock(res, {
-    walletBalance: users[0].walletBalance + amount,
-    auditEntry: { ...auditEntry, actionType: 'CREDIT', amountChanged: amount, balanceAfter: users[0].walletBalance + amount },
+// POST /api/users/:id/topup { amount } — REAL.
+usersRouter.post('/:id/topup', async (req, res) => {
+  const userId = requireId(req.params.id, 'Customer ID');
+  const amount = requireAmount(req.body?.amount);
+  const result = await withTransaction(async (client) => {
+    await client.query('CALL sp_wallet_topup($1, $2)', [userId, amount]);
+    return readWalletChange(client, userId);
   });
+  res.json(result);
 });

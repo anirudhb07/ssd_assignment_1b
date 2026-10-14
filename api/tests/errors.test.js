@@ -25,4 +25,16 @@ describe('fromPgError', () => {
   it('returns null for errors it does not recognise', () => {
     expect(fromPgError({ code: '42P01', message: 'relation does not exist' })).toBeNull();
   });
+
+  it('maps a missing order to 404', () => {
+    expect(fromPgError({ code: 'P0001', message: 'Order does not exist: abc' })).toMatchObject({ status: 404, code: 'NOT_FOUND' });
+  });
+
+  it('maps an already-delivered order to 409 INVALID_TRANSITION', () => {
+    expect(fromPgError({ code: 'P0001', message: 'Order is already DELIVERED: abc' })).toMatchObject({ status: 409, code: 'INVALID_TRANSITION' });
+  });
+
+  it('maps wallet overflow to 400 INVALID_AMOUNT', () => {
+    expect(fromPgError({ code: '22003' })).toMatchObject({ status: 400, code: 'INVALID_AMOUNT' });
+  });
 });
