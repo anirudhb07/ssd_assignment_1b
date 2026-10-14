@@ -16,8 +16,8 @@ The header's "Acting as" switcher stands in for login, so one person can demo al
 
 | Screen | Owner | Issue | Page shape | Wireframe |
 | --- | --- | --- | --- | --- |
-| Checkout (Workflow 1) | Member A | #2 | Dashboard (menu and cart instead of charts) | `checkout.png` (to add) |
-| Order detail with "Advance status" | Member A | #2 | Detail | `checkout.png` (to add) |
+| Checkout (Workflow 1) | Member A | #2 | Dashboard (menu and cart instead of charts) | [`checkout.png`](checkout.png) ([source](checkout.excalidraw)) |
+| Order detail with "Advance status" | Member A | #2 | Detail | [`checkout.png`](checkout.png) ([source](checkout.excalidraw)) |
 | Browse: users, restaurants, orders | Member B | #1 | List | `browse.png` (to add) |
 | Restaurant and customer detail | Member B | #1 | Detail | `browse.png` (to add) |
 | Wallet | Member B | #1 | List | `wallet.png` (to add) |
