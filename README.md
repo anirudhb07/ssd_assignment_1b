@@ -644,7 +644,7 @@ sp_refresh_restaurant_summary()
 
 ---
 
-# 8. Atomic Checkout Workflow
+# 8. Atomic Checkout 
 
 The checkout logic is implemented in:
 
