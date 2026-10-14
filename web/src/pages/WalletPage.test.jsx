@@ -149,6 +149,23 @@ describe('history', () => {
     expect(lastTableCall()).toBeUndefined();
   });
 
+  // Regression (review on #40): a bad date in the URL used to crash the page
+  // with "RangeError: Invalid time value" while building the empty message.
+  it.each([
+    ['from=invalid-date', 'start'],
+    ['from=2026-13-45', 'start'],
+    ['to=2026-02-30', 'end'],
+  ])('explains a bad date in the link (%s) instead of crashing', async (query, which) => {
+    renderAt(`/wallet?userId=u1&${query}`);
+    expect(await screen.findByRole('alert')).toHaveTextContent(`The ${which} date in the link isn’t a real date.`);
+    expect(lastTableCall()).toBeUndefined();
+    expect(statValue('Current balance')).toHaveTextContent('₹33,683');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Clear dates' }));
+    expect(await screen.findByRole('table')).toBeInTheDocument();
+    expect(lastTableCall()[1]).toMatchObject({ from: '', to: '' });
+  });
+
   it("shows the API's message, with a retry, when the history can't load", async () => {
     getUserAudit.mockImplementation(async (id, params) => {
       if (params.pageSize === 1) return page(entries.slice(0, 1), 24);

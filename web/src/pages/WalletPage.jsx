@@ -17,6 +17,15 @@ const REVERSED_DATES = 'The start date must be on or before the end date.';
 const dayFormat = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 const day = (value) => dayFormat.format(new Date(value));
 
+// The dates come from the URL, so they can be anything. Accept only a real
+// YYYY-MM-DD day (same rule as the API): new Date() would otherwise roll
+// 2026-02-30 into March, and an Invalid Date makes formatting throw.
+const isCalendarDay = (value) => {
+  const date = new Date(`${value}T00:00:00Z`);
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(date.getTime()) && date.toISOString().startsWith(value);
+};
+const badDateMessage = (which) => `The ${which} date in the link isn’t a real date. Choose it again, or clear the dates.`;
+
 // Wallet audit trail (issue #21): every change to one customer's wallet,
 // read-only, written by the audit trigger. Shows the customer in the link
 // (/wallet?userId=…, from "Wallet history" on a customer page), otherwise
@@ -47,10 +56,10 @@ export function WalletPage() {
             />
           </div>
         </div>
-        <TextField id="wallet-from" label="From" type="date" value={from} max={to || undefined}
-          onChange={(e) => update({ from: e.target.value, page: null })} />
-        <TextField id="wallet-to" label="To" type="date" value={to} min={from || undefined}
-          onChange={(e) => update({ to: e.target.value, page: null })} />
+        <TextField id="wallet-from" label="From" type="date" value={isCalendarDay(from) ? from : ''}
+          max={isCalendarDay(to) ? to : undefined} onChange={(e) => update({ from: e.target.value, page: null })} />
+        <TextField id="wallet-to" label="To" type="date" value={isCalendarDay(to) ? to : ''}
+          min={isCalendarDay(from) ? from : undefined} onChange={(e) => update({ to: e.target.value, page: null })} />
         <Button variant="secondary" disabled={!from && !to} onClick={() => update({ from: null, to: null, page: null })}>
           Clear dates
         </Button>
@@ -71,11 +80,14 @@ export function WalletPage() {
 }
 
 function CustomerWallet({ customer, from, to, page, update }) {
-  const reversed = Boolean(from && to && from > to);
+  const dateProblem = from && !isCalendarDay(from) ? badDateMessage('start')
+    : to && !isCalendarDay(to) ? badDateMessage('end')
+    : from && to && from > to ? REVERSED_DATES
+    : null;
   const audit = useQuery({
     queryKey: ['audit', customer.id, { from, to, page }],
     queryFn: () => getUserAudit(customer.id, { from, to, page, pageSize: PAGE_SIZE }),
-    enabled: !reversed,
+    enabled: !dateProblem,
     // Keep this customer's previous page visible while the next one loads
     // (only if it had rows; an empty or past-the-end page shows "Loading").
     placeholderData: (previous, previousQuery) =>
@@ -97,9 +109,10 @@ function CustomerWallet({ customer, from, to, page, update }) {
   }, [pastTheEnd, lastPage, update]);
 
   const filtered = Boolean(from || to);
-  const entries = reversed || audit.isError ? '—' : audit.data ? audit.data.total.toLocaleString('en-IN') : '…';
+  const entries = dateProblem || audit.isError ? '—' : audit.data ? audit.data.total.toLocaleString('en-IN') : '…';
   const lastChange = latest.data ? formatDateTime(latest.data.items[0]?.changedAt) : latest.isError ? '—' : '…';
-  const emptyMessage = from && to ? `Nothing between ${day(from)} and ${day(to)}.`
+  // Only built once the dates are known to be valid (see dateProblem).
+  const emptyMessage = dateProblem ? '' : from && to ? `Nothing between ${day(from)} and ${day(to)}.`
     : from ? `Nothing on or after ${day(from)}.`
     : to ? `Nothing on or before ${day(to)}.`
     : 'This customer’s wallet has no entries yet.';
@@ -112,8 +125,8 @@ function CustomerWallet({ customer, from, to, page, update }) {
         <Card><Stat label="Last change" value={lastChange} /></Card>
       </div>
 
-      {reversed ? (
-        <div className="alert alert--error" role="alert">{REVERSED_DATES}</div>
+      {dateProblem ? (
+        <div className="alert alert--error" role="alert">{dateProblem}</div>
       ) : pastTheEnd ? (
         <Loading label="Loading wallet history…" />
       ) : (
