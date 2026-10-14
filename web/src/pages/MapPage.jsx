@@ -31,9 +31,9 @@ function RecenterMap({ lat, lng, radiusMeters }) {
   const map = useMap();
   useEffect(() => {
     if (Number.isFinite(lat) && Number.isFinite(lng)) {
-      if (radiusMeters) {
-        const circleBounds = L.circle([lat, lng], { radius: radiusMeters }).getBounds();
-        map.fitBounds(circleBounds, { padding: [16, 16] });
+      if (radiusMeters && L?.latLng) {
+        const bounds = L.latLng(lat, lng).toBounds(radiusMeters * 2);
+        map.fitBounds(bounds, { padding: [16, 16] });
       } else {
         map.setView([lat, lng], 13);
       }
