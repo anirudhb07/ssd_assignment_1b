@@ -333,6 +333,11 @@ def seed_database(
         "DriverPings"
     ]
 
+    # Idempotency check: don't duplicate documents if already seeded
+    existing_menus = menus.count_documents({})
+    if existing_menus > 0:
+        print(f"MongoDB already has {existing_menus:,} menus. Skipping seed to remain idempotent.")
+        return
 
     # =================================================
     # MENUS

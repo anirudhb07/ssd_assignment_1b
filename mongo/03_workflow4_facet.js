@@ -4,8 +4,11 @@
 // =====================================================
 
 
-db.Reviews.aggregate([
+// Optional restaurantId parameter (null or undefined analyzes all reviews)
+const targetRestaurantId = typeof restaurantId !== 'undefined' ? restaurantId : null;
 
+db.Reviews.aggregate([
+    ...(targetRestaurantId ? [{ $match: { restaurantId: targetRestaurantId } }] : []),
     {
         $facet: {
 
