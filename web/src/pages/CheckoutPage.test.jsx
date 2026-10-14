@@ -1,0 +1,225 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { MemoryRouter, Route, Routes } from 'react-router';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+// Mirrors the existing mock menu contract; the web container only mounts web/.
+const mockMenu = { restaurantId: 'r1', restaurantName: 'Restaurant-166', categories: [
+  { name: 'Starters', items: [
+    { name: 'Paneer Tikka', description: 'Char-grilled cottage cheese', price: 240, available: true, customizationAddOns: [{ name: 'Extra Cheese', price: 40 }] },
+    { name: 'Veg Spring Roll', price: 180, available: false, customizationAddOns: [] },
+  ] },
+  { name: 'Main Course', items: [{ name: 'Butter Chicken', price: 400, available: true, customizationAddOns: [{ name: 'Extra Spicy', price: 10 }, { name: 'Extra Naan', price: 50 }] }] },
+] };
+import { ApiError } from '../api/client.js';
+import { checkout, getMenu, getUser, listRestaurants, topUpWallet } from '../api/endpoints.js';
+import { ActorProvider, useActor } from '../context/ActorContext.jsx';
+import { CheckoutPage } from './CheckoutPage.jsx';
+
+vi.mock('../api/endpoints.js', () => ({ checkout: vi.fn(), getMenu: vi.fn(), getUser: vi.fn(), listRestaurants: vi.fn(), topUpWallet: vi.fn() }));
+const restaurants = [{ id: 'r1', name: 'Cafe One', latitude: 12, longitude: 77 }, { id: 'r2', name: 'Cafe Two', latitude: 13, longitude: 78 }];
+const menu = { restaurantId: 'r1', categories: [{ name: 'Snacks', items: [
+  { name: 'Tea', price: 0.1, available: true, customizationAddOns: [{ name: 'Milk', price: 0.2 }] },
+  { name: 'Toast', price: 0.2, available: true },
+  { name: 'Soup', price: 10, available: false },
+] }] };
+const debit = { id: 'audit-debit', actionType: 'DEBIT', amountChanged: 0.3, balanceAfter: 99.7, changedAt: '2026-10-14T10:00:00Z' };
+const success = { order: { id: 'order-real', status: 'PREPARING' }, balanceBefore: 100, balanceAfter: 99.7, auditEntry: debit };
+const credit = { walletBalance: 200, auditEntry: { ...debit, id: 'audit-credit', actionType: 'CREDIT', amountChanged: 100, balanceAfter: 200 } };
+const deferred = () => { let resolve; const promise = new Promise((r) => { resolve = r; }); return { promise, resolve }; };
+function SwitchCustomer() {
+  const { setUser } = useActor();
+  return <button onClick={() => setUser({ id: 'u2', name: 'Second customer' })}>Switch customer</button>;
+}
+function setup(customer = true) {
+  localStorage.setItem('bitestream.actor', JSON.stringify({ role: 'customer', user: customer ? { id: 'u1', name: 'Customer One' } : null }));
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  const invalidate = vi.spyOn(client, 'invalidateQueries');
+  render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/checkout']}><ActorProvider><SwitchCustomer /><Routes>
+    <Route path="/checkout" element={<CheckoutPage />} />
+    <Route path="/browse/orders/:id" element={<p>Order detail destination</p>} />
+  </Routes></ActorProvider></MemoryRouter></QueryClientProvider>);
+  return { invalidate, client };
+}
+async function choose() { await userEvent.click(await screen.findByRole('button', { name: 'Choose Cafe One' })); }
+async function add(name = 'Tea') { await userEvent.click(await screen.findByRole('button', { name: `Add ${name}` })); }
+async function submit() { await userEvent.click(screen.getByRole('button', { name: 'Place order' })); }
+const cart = () => within(screen.getByRole('heading', { name: 'Your cart' }).closest('section'));
+beforeEach(() => {
+  vi.resetAllMocks();
+  listRestaurants.mockResolvedValue({ items: restaurants, page: 1, pageSize: 20, total: 2 });
+  getMenu.mockResolvedValue(menu);
+  getUser.mockResolvedValue({ id: 'u1', name: 'Customer One', walletBalance: 100, activeOrder: null });
+  checkout.mockResolvedValue(success);
+  topUpWallet.mockResolvedValue(credit);
+});
+
+describe('Checkout', () => {
+  it('loads real restaurant choices, search and pagination through the abstraction', async () => {
+    listRestaurants.mockResolvedValue({ items: restaurants, page: 1, pageSize: 20, total: 40 });
+    setup();
+    expect(await screen.findByText('Cafe One')).toBeInTheDocument();
+    expect(listRestaurants).toHaveBeenCalledWith({ page: 1, pageSize: 20, search: '' });
+    await userEvent.click(screen.getByRole('button', { name: 'Next' }));
+    await waitFor(() => expect(listRestaurants).toHaveBeenLastCalledWith({ page: 2, pageSize: 20, search: '' }));
+    await userEvent.type(screen.getByLabelText('Search restaurants'), 'Cafe');
+    await waitFor(() => expect(listRestaurants).toHaveBeenLastCalledWith({ page: 1, pageSize: 20, search: 'Cafe' }));
+  });
+
+  it('loads the selected menu and supports the existing production mock shape', async () => {
+    getMenu.mockResolvedValue(mockMenu);
+    setup(); await choose();
+    expect(await screen.findByText('Paneer Tikka')).toBeInTheDocument();
+    expect(getMenu).toHaveBeenCalledWith('r1');
+    expect(screen.getByRole('button', { name: 'Add Veg Spring Roll' })).toBeDisabled();
+    await add('Paneer Tikka');
+    await userEvent.click(screen.getByLabelText(/Extra Cheese/));
+    expect(cart().getByText('₹280')).toBeInTheDocument();
+  });
+
+  it('shows loading, then an empty menu', async () => {
+    const pending = deferred(); getMenu.mockReturnValue(pending.promise);
+    setup(); await choose();
+    expect(screen.getByRole('status')).toHaveTextContent('Loading');
+    await act(async () => pending.resolve({ categories: [] }));
+    expect(await screen.findByText('No menu items yet')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Change restaurant' })).toBeEnabled();
+  });
+
+  it('shows menu errors as-is and retries', async () => {
+    getMenu.mockRejectedValueOnce(new Error('Menu unavailable')).mockResolvedValue(menu);
+    setup(); await choose();
+    expect(await screen.findByRole('alert')).toHaveTextContent('Menu unavailable');
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByRole('button', { name: 'Add Tea' })).toBeEnabled();
+  });
+
+  it('adds/removes items, adjusts quantities and selects/deselects add-ons', async () => {
+    setup(); await choose();
+    expect(await screen.findByText('Your cart is empty')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Place order' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Add Soup' })).toBeDisabled();
+    await add();
+    await userEvent.click(screen.getByLabelText(/Milk/));
+    await userEvent.click(screen.getByRole('button', { name: 'Increase Tea' }));
+    expect(cart().getByText('Subtotal: ₹0.60')).toBeInTheDocument();
+    await userEvent.click(screen.getByLabelText(/Milk/));
+    expect(cart().getByText('Subtotal: ₹0.20')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Decrease Tea' }));
+    expect(cart().getByText('Subtotal: ₹0.10')).toBeInTheDocument();
+    await add('Toast');
+    await userEvent.click(screen.getByRole('button', { name: 'Remove Toast' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Decrease Tea' }));
+    expect(screen.getByText('Your cart is empty')).toBeInTheDocument();
+  });
+
+  it('sends 0.3 for 0.1 + 0.2 and displays only the returned order/balance/audit data', async () => {
+    const { invalidate } = setup(); await choose(); await add(); await add('Toast'); await submit();
+    expect(checkout).toHaveBeenCalledWith({ userId: 'u1', restaurantId: 'r1', amount: 0.3 });
+    expect(await screen.findByText(/Order confirmed/)).toBeInTheDocument();
+    expect(screen.getByText('order-real')).toBeInTheDocument();
+    expect(screen.getByText('audit-debit')).toBeInTheDocument();
+    expect(screen.getByText('Debit')).toBeInTheDocument();
+    expect(screen.getByText('₹100')).toBeInTheDocument();
+    expect(screen.getAllByText('₹99.70')).toHaveLength(2);
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['users'] });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['orders'] });
+    expect(screen.getByRole('link', { name: 'View order' })).toHaveAttribute('href', '/browse/orders/order-real');
+    await userEvent.click(screen.getByRole('link', { name: 'View order' }));
+    expect(screen.getByText('Order detail destination')).toBeInTheDocument();
+  });
+
+  it('requires an Acting as customer', async () => {
+    setup(false); await choose(); await add();
+    expect(screen.getByText(/Choose a customer in the Acting as/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Place order' })).toBeDisabled();
+    expect(getUser).not.toHaveBeenCalled();
+  });
+
+  it('blocks duplicate submissions and cart changes while payment is pending', async () => {
+    const pending = deferred(); checkout.mockReturnValue(pending.promise);
+    setup(); await choose(); await add(); await submit();
+    const button = screen.getByRole('button', { name: 'Placing order…' });
+    expect(button).toBeDisabled(); await userEvent.click(button);
+    expect(checkout).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: 'Change restaurant' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Add Tea' })).toBeDisabled();
+    await act(async () => pending.resolve(success));
+    expect(await screen.findByText(/Order confirmed/)).toBeInTheDocument();
+  });
+
+  it('handles the former >5000 mock scenario with 402, top-up, and explicit retry', async () => {
+    getMenu.mockResolvedValue({ categories: [{ name: 'Meals', items: [{ name: 'Meal', price: 5001, available: true }] }] });
+    checkout.mockRejectedValueOnce(new ApiError(402, 'INSUFFICIENT_BALANCE', 'Not enough funds. Please top up.')).mockResolvedValue(success);
+    setup(); await choose(); await add('Meal'); await submit();
+    expect(checkout).toHaveBeenCalledWith({ userId: 'u1', restaurantId: 'r1', amount: 5001 });
+    expect(await screen.findByRole('alert')).toHaveTextContent('Not enough funds. Please top up.');
+    await userEvent.click(screen.getByRole('button', { name: 'Top up' }));
+    const field = screen.getByLabelText('Top-up amount (₹)');
+    await userEvent.type(field, '0.001');
+    expect(screen.getByRole('button', { name: 'Confirm top up' })).toBeDisabled();
+    await userEvent.clear(field); await userEvent.type(field, '100');
+    const pending = deferred(); topUpWallet.mockReturnValueOnce(pending.promise);
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm top up' }));
+    expect(screen.getByRole('button', { name: 'Topping up…' })).toBeDisabled();
+    await act(async () => pending.resolve(credit));
+    expect(await screen.findByText(/Top-up successful/)).toBeInTheDocument();
+    expect(screen.getByText('audit-credit')).toBeInTheDocument();
+    expect(topUpWallet).toHaveBeenCalledWith('u1', 100);
+    expect(checkout).toHaveBeenCalledTimes(1);
+    await submit();
+    expect(await screen.findByText(/Order confirmed/)).toBeInTheDocument();
+    expect(checkout).toHaveBeenCalledTimes(2);
+  });
+
+  it('handles the former active-order simulation through a mocked 409 and actual getUser order ID', async () => {
+    checkout.mockRejectedValue(new ApiError(409, 'ACTIVE_ORDER_EXISTS', 'Finish your current order first.'));
+    getUser.mockResolvedValue({ name: 'Customer One', walletBalance: 100, activeOrder: { id: 'active-42' } });
+    setup(); await choose(); await add(); await submit();
+    expect(await screen.findByRole('alert')).toHaveTextContent('Finish your current order first.');
+    const link = await screen.findByRole('link', { name: 'View active order' });
+    expect(link).toHaveAttribute('href', '/browse/orders/active-42');
+    expect(checkout).toHaveBeenCalledWith({ userId: 'u1', restaurantId: 'r1', amount: 0.1 });
+    await userEvent.click(link);
+    expect(screen.getByText('Order detail destination')).toBeInTheDocument();
+  });
+
+  it.each([[400, 'INVALID_AMOUNT'], [409, 'INVALID_TRANSITION'], [0, 'NETWORK'], [500, 'INTERNAL']])('shows %s %s without an invented active order', async (status, code) => {
+    checkout.mockRejectedValue(new ApiError(status, code, 'Actual backend message'));
+    setup(); await choose(); await add(); await submit();
+    expect(await screen.findByRole('alert')).toHaveTextContent('Actual backend message');
+    expect(screen.queryByRole('link', { name: 'View active order' })).not.toBeInTheDocument();
+  });
+
+  it('clears incompatible cart state on restaurant change', async () => {
+    setup(); await choose(); await add();
+    await userEvent.click(screen.getByRole('button', { name: 'Change restaurant' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Choose Cafe Two' }));
+    expect(await screen.findByText('Your cart is empty')).toBeInTheDocument();
+    expect(getMenu).toHaveBeenLastCalledWith('r2');
+    await add(); await submit();
+    expect(checkout).toHaveBeenCalledWith({ userId: 'u1', restaurantId: 'r2', amount: 0.1 });
+  });
+
+  it('does not show the previous customer’s late payment result after switching actors', async () => {
+    const pending = deferred(); checkout.mockReturnValue(pending.promise);
+    setup(); await choose(); await add(); await submit();
+    await userEvent.click(screen.getByRole('button', { name: 'Switch customer' }));
+    await act(async () => pending.resolve(success));
+    expect(screen.queryByText(/Order confirmed/)).not.toBeInTheDocument();
+    await choose();
+    expect(await screen.findByText('Your cart is empty')).toBeInTheDocument();
+  });
+
+  it('handles top-up failure without retrying checkout', async () => {
+    checkout.mockRejectedValue(new ApiError(402, 'INSUFFICIENT_BALANCE', 'Insufficient wallet'));
+    topUpWallet.mockRejectedValue(new Error('Wallet service unavailable'));
+    setup(); await choose(); await add(); await submit();
+    await userEvent.click(await screen.findByRole('button', { name: 'Top up' }));
+    await userEvent.type(screen.getByLabelText('Top-up amount (₹)'), '10');
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm top up' }));
+    expect(await screen.findByText('Wallet service unavailable')).toBeInTheDocument();
+    expect(checkout).toHaveBeenCalledTimes(1);
+  });
+});
+

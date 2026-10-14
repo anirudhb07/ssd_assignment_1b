@@ -1,0 +1,17 @@
+.checkout-layout { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: var(--space-5); align-items: start; }
+.checkout-page { min-width: 0; overflow-wrap: anywhere; }
+.checkout-page fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.checkout-page fieldset:disabled { opacity: 0.7; }
+.checkout-line { border-bottom: 1px solid var(--color-border); padding-block: var(--space-3); display: grid; gap: var(--space-2); }
+.checkout-line:last-child { border-bottom: 0; }
+.checkout-line .row { justify-content: space-between; }
+.checkout-addons { display: grid; gap: var(--space-2); }
+.checkout-addons label { display: flex; gap: var(--space-2); align-items: start; }
+.checkout-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--space-3); }
+.checkout-page dl { margin: 0; }
+.checkout-page dt { color: var(--color-text-muted); font-size: var(--text-sm); }
+.checkout-page dd { margin: 0 0 var(--space-2); }
+@media (max-width: 700px) {
+  .checkout-layout { grid-template-columns: minmax(0, 1fr); }
+  .checkout-page .card { padding: var(--space-4); }
+}
