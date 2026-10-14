@@ -158,7 +158,7 @@ Agree who takes which letter, then have **one person** fill in all four rows in 
 | A | Nithin | 2026201038 | innith | Checkout (Workflow 1) |
 | B | Anirudh | 2026201058 | anirudhb07 | Browse & Wallet |
 | C |Sanjana |2026204012|Sanjana-Venkatesan | Analytics & Reviews (Workflows 2, 4) |
-| D | | | | Map (Workflow 3) & release |
+| D | Dhavla Ravi | 2026204004 | cptOreo | Map (Workflow 3) & release |
 
 ### Who owns what
 
@@ -636,7 +636,7 @@ sp_refresh_restaurant_summary()
 
 ---
 
-# 8. Atomic Checkout Workflow
+# 8. Atomic Checkout 
 
 The checkout logic is implemented in:
 
