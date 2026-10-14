@@ -115,6 +115,7 @@ docker compose --profile tools up -d
 | Open a Mongo shell | `docker compose exec mongo mongosh bitestream` |
 | Run API tests | `docker compose exec api npm test` |
 | Run web tests | `docker compose exec web npm test` |
+| Follow simulator logs | `docker compose logs -f ping-simulator` |
 
 ### How the seed works
 
@@ -127,7 +128,14 @@ The `sql/`, `mongo/` and `data_generation/` folders are read straight from your 
 - **Changed `data_generation/requirements.txt` or `docker/seed/Dockerfile`:** run `docker compose build seed` first.
 - **Changed `api/package.json` or `web/package.json`:** run `docker compose restart api web`. They run `npm install` on start.
 
-Driver pings expire 2 hours after they are created (TTL index). If the map shows no drivers, reset and reseed.
+### Driver Ping Simulator
+
+Seeded pings expire after 2 hours (MongoDB TTL index). To keep the live map populated and moving without requiring frequent reseeding, the `ping-simulator` Compose service runs `data_generation/ping_simulator.py` in the background after seeding finishes. It emits fresh coordinates for ~200 drivers near seeded restaurants every few seconds.
+
+```bash
+docker compose logs -f ping-simulator
+docker compose restart ping-simulator
+```
 
 ### Changing ports or seed size
 
@@ -183,7 +191,7 @@ Every endpoint in `docs/api_endpoints.md` already answers. Routes marked `MOCK` 
 
 - Mock responses carry the header `X-Mock: true`, and the browser console logs `[mock data] GET /users`.
 - Checkout's mock can show both failures: an amount over 5000 returns `402 INSUFFICIENT_BALANCE`, and `?simulate=active-order` returns `409 ACTIVE_ORDER_EXISTS`.
-- Real so far: `GET /health`, `GET /users`, `GET /users/:id`, `GET /users/:id/audit`, `GET /orders`, `GET /orders/:id`, `GET /restaurants`, `GET /restaurants/:id`, `GET /reviews/stats`.
+- Real so far: `GET /health`, `GET /users`, `GET /users/:id`, `GET /users/:id/audit`, `GET /orders`, `GET /orders/:id`, `GET /restaurants`, `GET /restaurants/:id`, `GET /reviews/stats`, `GET /drivers/nearby`.
 
 ### Building a screen
 
