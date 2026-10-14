@@ -21,8 +21,8 @@ The header's "Acting as" switcher stands in for login, so one person can demo al
 | Browse: users, restaurants, orders | Member B | #1 | List | [`browse.png`](browse.png) ([source](browse.excalidraw)) |
 | Restaurant and customer detail | Member B | #1 | Detail | [`browse.png`](browse.png) ([source](browse.excalidraw)) |
 | Wallet | Member B | #1 | List | [`wallet.png`](wallet.png) ([source](wallet.excalidraw)) |
-| Analytics (Workflow 2) | Member C | #3 | Dashboard | `analytics.png` (to add) |
-| Reviews + menu (Workflow 4) | Member C | #3 | Dashboard | `reviews.png` (to add) |
+| Analytics (Workflow 2) | Member C | #3 | Dashboard | [`analytics.png`](analytics.png) ([source](analytics.excalidraw)) |
+| Reviews + menu (Workflow 4) | Member C | #3 | Dashboard | [`reviews.png`](reviews.png) ([source](reviews.excalidraw)) |
 | Map (Workflow 3) | Member D | #4 | Dashboard (map instead of the chart) | `map.png` (to add) |
 
 ## How to make a wireframe
