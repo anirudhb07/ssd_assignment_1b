@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import { ORDER_SELECT, ORDER_STATUSES } from '../db/orders.js';
-import { query } from '../db/postgres.js';
+import { query, withTransaction } from '../db/postgres.js';
+import { requireId } from '../lib/checkoutInput.js';
 import { badRequest, notFound } from '../lib/errors.js';
 import { paged, parsePagination } from '../lib/pagination.js';
-import { order, sendMock } from '../mocks.js';
 
 export const ordersRouter = Router();
 
@@ -52,9 +52,13 @@ ordersRouter.get('/:id', async (req, res) => {
   res.json(result.rows[0]);
 });
 
-// POST /api/orders/:id/advance — MOCK.
-// TODO (Member A): add sp_advance_order_status (sql/07) and CALL it here.
-// PREPARING -> DELIVERING -> DELIVERED; 409 INVALID_TRANSITION if already DELIVERED.
-ordersRouter.post('/:id/advance', (req, res) => {
-  sendMock(res, { ...order, id: req.params.id, status: 'DELIVERING' });
+// POST /api/orders/:id/advance — REAL.
+ordersRouter.post('/:id/advance', async (req, res) => {
+  const orderId = requireId(req.params.id, 'Order ID');
+  const order = await withTransaction(async (client) => {
+    await client.query('CALL sp_advance_order_status($1)', [orderId]);
+    const result = await client.query(`${ORDER_SELECT} WHERE o.id = $1`, [orderId]);
+    return result.rows[0];
+  });
+  res.json(order);
 });

@@ -35,13 +35,18 @@ export function fromPgError(err) {
       );
     }
     if (/^User does not exist/.test(err.message)) return notFound('That customer');
+    if (/^Order does not exist/.test(err.message)) return notFound('That order');
+    if (/^Order is already DELIVERED/.test(err.message)) {
+      return new ApiError(409, 'INVALID_TRANSITION', 'This order has already been delivered and cannot be advanced further.');
+    }
     if (/^Restaurant does not exist/.test(err.message)) return notFound('That restaurant');
     if (/must be greater than zero/.test(err.message)) {
-      return new ApiError(400, 'INVALID_AMOUNT', 'The order amount must be greater than zero.');
+      return new ApiError(400, 'INVALID_AMOUNT', 'The amount must be greater than zero.');
     }
   }
 
   if (err.code === '22P02') return badRequest('One of the IDs in the request is not a valid ID.');
+  if (err.code === '22003') return new ApiError(400, 'INVALID_AMOUNT', 'The amount would exceed the wallet balance limit.');
   if (err.code === '23514') return badRequest('That change would break a database rule (for example, a negative wallet balance).');
 
   return null;

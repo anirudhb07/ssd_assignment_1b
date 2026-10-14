@@ -183,7 +183,7 @@ Every endpoint in `docs/api_endpoints.md` already answers. Routes marked `MOCK` 
 
 - Mock responses carry the header `X-Mock: true`, and the browser console logs `[mock data] GET /users`.
 - Checkout's mock can show both failures: an amount over 5000 returns `402 INSUFFICIENT_BALANCE`, and `?simulate=active-order` returns `409 ACTIVE_ORDER_EXISTS`.
-- Real so far: `GET /health`, `GET /users`, `GET /users/:id`, `GET /orders`, `GET /orders/:id`, `GET /restaurants`, `GET /restaurants/:id`, `GET /reviews/stats`.
+- Real so far: `GET /health`, `GET /users`, `GET /users/:id`, `GET /users/:id/audit`, `GET /orders`, `GET /orders/:id`, `GET /restaurants`, `GET /restaurants/:id`, `GET /reviews/stats`.
 
 ### Building a screen
 
@@ -246,6 +246,31 @@ The defaults in `api/src/config.js` already point at the Docker databases on por
 docker compose exec api npm test   # API: error mapping (unit) + endpoints against the seeded databases
 docker compose exec web npm test   # Web: component tests with Testing Library
 ```
+
+The issue #9 database regression script runs against an initialized PostgreSQL database and rolls back its fixtures. With Docker running, use this from PowerShell:
+
+```powershell
+Get-Content -Raw sql/tests/order_status_and_topup.sql | docker compose exec -T postgres psql -X -U postgres -d bitestream -v ON_ERROR_STOP=1
+```
+
+macOS, Linux or WSL:
+
+```bash
+docker compose exec -T postgres psql -X -U postgres -d bitestream -v ON_ERROR_STOP=1 < sql/tests/order_status_and_topup.sql
+```
+
+Or with a local psql connection: `psql -X -d bitestream -v ON_ERROR_STOP=1 -f sql/tests/order_status_and_topup.sql`.
+The script checks both procedures, their errors, exact CREDIT audit rows, and checkout before and after delivery.
+
+Example calls (replace the UUID placeholders with existing IDs):
+
+```sql
+CALL sp_wallet_topup('USER_UUID', 100.00);
+CALL sp_advance_order_status('ORDER_UUID'); -- PREPARING -> DELIVERING
+CALL sp_advance_order_status('ORDER_UUID'); -- DELIVERING -> DELIVERED
+```
+
+Top-ups must be positive and finite, and round to at least 0.01. Values are rounded to two decimal places to match the wallet; exceeding its `DECIMAL(10,2)` capacity fails without changing the wallet or audit history. Both procedures participate in the caller's transaction.
 
 ### Git workflow
 
@@ -310,17 +335,21 @@ ssd_assignment_1b/
 2. Prices are in Indian rupees (₹).
 3. The checkout total is calculated in the browser from the menu; `sp_execute_checkout` charges that amount. The procedure does not check prices against the menu.
 4. Orders move only forward: Preparing → Delivering → Delivered. There is no cancellation, because the inherited schema has no such status.
-5. _Add more as you make decisions._
+5. Seeded wallets start at ₹0 and get one opening CREDIT (their starting balance) 30 days ago, before any order, so each customer's audit trail explains their whole balance.
+6. Dates in filters (the Wallet screen's from/to) are Indian calendar days (`Asia/Kolkata`). The database stores UTC; the app shows times in the browser's time zone.
+7. _Add more as you make decisions._
 
 ## Changes to the Inherited Code
 
 | Change | Files | Why |
 | --- | --- | --- |
+| Order status advance and wallet top-up (issue #9) | `sql/07_order_status_and_topup.sql`, `sql/tests/order_status_and_topup.sql` | Adds forward-only status transitions and atomic wallet credits through the existing audit trigger. Enables ordering again after delivery and recovering from insufficient balance. Apply with `docker compose run --rm seed`; no reset needed. |
 | Docker development environment | `docker-compose.yml`, `docker/seed/`, `.env.example`, `.dockerignore` | One command gives everyone the same databases and seeded data. |
 | Unix line endings for shell scripts | `.gitattributes` | The seed script must run in Linux containers when checked out on Windows. |
 | README restructured | `README.md` | Added setup, team workflow and Assignment 2 sections; Assignment 1 text kept unchanged below. |
 | Seed runs every numbered SQL file (except `06`) | `docker/seed/seed.sh` | So new scripts (`sql/07`–`10`) are applied without editing the seed. |
 | Index `idx_orders_created_at` on `orders(created_at DESC, id DESC)` | `sql/08_orders_recent_index.sql` | Browse lists orders newest first. Without it every page scanned and sorted all 120,000 orders (128 ms); with it, 1.5 ms. |
+| Wallet audit rows can be ordered: `seq` column, trigger uses `clock_timestamp()`, seeder dates each row with its order's time | `sql/08_audit_ordering.sql`, `data_generation/postgres_seeder.py` | The trigger used `NOW()` (transaction start) and the seeder ran in one transaction, so all 120,000 audit rows shared one timestamp: no date filter or running balance was possible. Now rows span 30 days and every customer's balances chain by `seq`. `seq` orders rows but can have gaps (rolled-back changes use numbers). After pulling, reseed with `RESET=1`. |
 | _Whoever makes a fix: add it here_ | | |
 
 ## Contribution
