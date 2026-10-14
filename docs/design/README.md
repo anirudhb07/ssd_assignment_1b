@@ -23,7 +23,7 @@ The header's "Acting as" switcher stands in for login, so one person can demo al
 | Wallet | Member B | #1 | List | [`wallet.png`](wallet.png) ([source](wallet.excalidraw)) |
 | Analytics (Workflow 2) | Member C | #3 | Dashboard | [`analytics.png`](analytics.png) ([source](analytics.excalidraw)) |
 | Reviews + menu (Workflow 4) | Member C | #3 | Dashboard | [`reviews.png`](reviews.png) ([source](reviews.excalidraw)) |
-| Map (Workflow 3) | Member D | #4 | Dashboard (map instead of the chart) | `map.png` (to add) |
+| Map (Workflow 3) | Member D | #4 | Dashboard (map instead of the chart) | [`map.png`](map.png) ([`.excalidraw`](map.excalidraw)) |
 
 ## How to make a wireframe
 
