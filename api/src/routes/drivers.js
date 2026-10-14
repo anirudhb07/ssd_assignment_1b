@@ -33,6 +33,26 @@ driversRouter.get('/nearby', async (req, res) => {
   const db = await getDb();
   const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
 
+  // Step 1: Deduplicate pings to each driver's single most recent ping in the last 10 minutes.
+  // This ensures drivers who went offline or moved outside the radius are not matched on an older ping.
+  const latest = await db.collection('DriverPings').aggregate([
+    { $match: { createdAt: { $gte: tenMinutesAgo } } },
+    { $sort: { createdAt: -1 } },
+    { $group: { _id: '$driverId', pingId: { $first: '$_id' } } },
+  ]).toArray();
+
+  if (latest.length === 0) {
+    return res.json({
+      origin: { lat, lng },
+      radiusMeters,
+      drivers: [],
+    });
+  }
+
+  const pingIds = latest.map((l) => l.pingId);
+
+  // Step 2: Run $geoNear matching only latest pings that are active and within radius.
+  // Results are sorted by distance ascending by $geoNear automatically.
   const drivers = await db.collection('DriverPings').aggregate([
     {
       $geoNear: {
@@ -45,33 +65,19 @@ driversRouter.get('/nearby', async (req, res) => {
         maxDistance: radiusMeters,
         spherical: true,
         query: {
+          _id: { $in: pingIds },
           active: true,
-          createdAt: { $gte: tenMinutesAgo },
         },
       },
     },
     {
-      $sort: { createdAt: -1 },
-    },
-    {
-      $group: {
-        _id: '$driverId',
-        location: { $first: '$location' },
-        distanceMeters: { $first: '$distanceMeters' },
-        lastSeenAt: { $first: '$createdAt' },
-      },
-    },
-    {
-      $sort: { distanceMeters: 1 },
-    },
-    {
       $project: {
         _id: 0,
-        driverId: '$_id',
+        driverId: 1,
         lat: { $arrayElemAt: ['$location.coordinates', 1] },
         lng: { $arrayElemAt: ['$location.coordinates', 0] },
         distanceMeters: { $round: ['$distanceMeters', 0] },
-        lastSeenAt: 1,
+        lastSeenAt: '$createdAt',
       },
     },
   ]).toArray();

@@ -11,7 +11,7 @@ vi.mock('react-leaflet', () => ({
   Circle: ({ center, radius }) => <div data-testid="map-circle" data-center={JSON.stringify(center)} data-radius={radius} />,
   Marker: ({ position, children }) => <div data-testid="map-marker" data-position={JSON.stringify(position)}>{children}</div>,
   Popup: ({ children }) => <div data-testid="map-popup">{children}</div>,
-  useMap: () => ({ setView: vi.fn() }),
+  useMap: () => ({ setView: vi.fn(), fitBounds: vi.fn() }),
 }));
 
 vi.mock('../api/endpoints.js', () => ({

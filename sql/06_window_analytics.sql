@@ -22,7 +22,6 @@ AS $$
             SUM(o.total_amount)::DECIMAL(14,2) AS daily_revenue
         FROM orders o
         WHERE o.status = 'DELIVERED'
-          AND (p_restaurant_id IS NULL OR o.restaurant_id = p_restaurant_id)
         GROUP BY
             o.restaurant_id,
             DATE(o.created_at)
@@ -66,6 +65,7 @@ AS $$
     FROM moving_average ma
     JOIN ranked_restaurants rr ON ma.restaurant_id = rr.restaurant_id
     JOIN restaurants r ON ma.restaurant_id = r.id
+    WHERE (p_restaurant_id IS NULL OR ma.restaurant_id = p_restaurant_id)
     ORDER BY
         rr.revenue_rank,
         ma.restaurant_id,

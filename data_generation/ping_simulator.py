@@ -147,9 +147,13 @@ def main():
                     d["v_lat"] = math.cos(heading) * speed
                     d["v_lng"] = math.sin(heading) * speed
 
-                # Occasionally toggle active state (simulate driver taking a break / coming online)
-                if random.random() < 0.02:
-                    d["active"] = not d["active"]
+                # Maintain ~90% active rate: active drivers rarely go on break (~1%), inactive drivers return online (~9%)
+                if d["active"]:
+                    if random.random() < 0.01:
+                        d["active"] = False
+                else:
+                    if random.random() < 0.09:
+                        d["active"] = True
 
                 pings.append({
                     "driverId": d["driverId"],

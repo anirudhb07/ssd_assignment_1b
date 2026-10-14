@@ -27,13 +27,18 @@ const driverIcon = L.divIcon({
 
 // Updates the map view ONLY when the origin coordinates change (e.g. user picks a new restaurant).
 // Prevents resetting pan/zoom on 5-second polling refetches.
-function RecenterMap({ lat, lng }) {
+function RecenterMap({ lat, lng, radiusMeters }) {
   const map = useMap();
   useEffect(() => {
     if (Number.isFinite(lat) && Number.isFinite(lng)) {
-      map.setView([lat, lng], 13);
+      if (radiusMeters) {
+        const circleBounds = L.circle([lat, lng], { radius: radiusMeters }).getBounds();
+        map.fitBounds(circleBounds, { padding: [16, 16] });
+      } else {
+        map.setView([lat, lng], 13);
+      }
     }
-  }, [lat, lng, map]);
+  }, [lat, lng, radiusMeters, map]);
   return null;
 }
 
@@ -167,14 +172,11 @@ export function MapPage() {
             }}
           >
             {/* Map Card */}
-            <Card
-              title={`Live Map (${formatDistance(radiusMeters)} radius)`}
-              style={{ padding: 'var(--space-3)' }}
-            >
+            <Card title={`Live Map (${formatDistance(radiusMeters)} radius)`}>
               <div style={{ height: '500px', width: '100%', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
                 <MapContainer
                   center={[resolvedOrigin.lat, resolvedOrigin.lng]}
-                  zoom={13}
+                  zoom={12}
                   scrollWheelZoom={false}
                   style={{ height: '100%', width: '100%' }}
                 >
@@ -182,7 +184,7 @@ export function MapPage() {
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                   />
-                  <RecenterMap lat={resolvedOrigin.lat} lng={resolvedOrigin.lng} />
+                  <RecenterMap lat={resolvedOrigin.lat} lng={resolvedOrigin.lng} radiusMeters={radiusMeters} />
 
                   {/* 5 km Radius Circle */}
                   <Circle

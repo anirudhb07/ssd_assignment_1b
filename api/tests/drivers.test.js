@@ -6,13 +6,49 @@ import { pool } from '../src/db/postgres.js';
 
 const app = createApp();
 
-afterAll(async () => {
-  await Promise.all([pool.end(), closeMongo()]);
-});
+const testFixtureDrivers = [
+  'driver-suite-active-1',
+  'driver-suite-active-2',
+  'driver-suite-active-3',
+];
 
 describe('GET /api/drivers/nearby', () => {
   const centerLat = 12.9716;
   const centerLng = 77.5946;
+
+  beforeAll(async () => {
+    const db = await getDb();
+    const now = new Date();
+    // Deterministic fixtures: ~350m, ~1.5km, ~3.5km from origin
+    await db.collection('DriverPings').insertMany([
+      {
+        driverId: 'driver-suite-active-1',
+        active: true,
+        location: { type: 'Point', coordinates: [centerLng, centerLat + 0.003] }, // ~330m
+        createdAt: now,
+      },
+      {
+        driverId: 'driver-suite-active-2',
+        active: true,
+        location: { type: 'Point', coordinates: [centerLng, centerLat + 0.014] }, // ~1.55km
+        createdAt: now,
+      },
+      {
+        driverId: 'driver-suite-active-3',
+        active: true,
+        location: { type: 'Point', coordinates: [centerLng, centerLat + 0.032] }, // ~3.55km
+        createdAt: now,
+      },
+    ]);
+  });
+
+  afterAll(async () => {
+    const db = await getDb();
+    await db.collection('DriverPings').deleteMany({
+      driverId: { $in: testFixtureDrivers },
+    });
+    await Promise.all([pool.end(), closeMongo()]);
+  });
 
   it('answers real query with correct structure and without X-Mock header', async () => {
     const res = await request(app).get(`/api/drivers/nearby?lat=${centerLat}&lng=${centerLng}`);
@@ -22,20 +58,19 @@ describe('GET /api/drivers/nearby', () => {
     expect(res.body).toHaveProperty('radiusMeters', 5000);
     expect(Array.isArray(res.body.drivers)).toBe(true);
 
-    if (res.body.drivers.length > 0) {
-      const first = res.body.drivers[0];
-      expect(first).toHaveProperty('driverId');
-      expect(typeof first.driverId).toBe('string');
-      expect(first).toHaveProperty('lat');
-      expect(typeof first.lat).toBe('number');
-      expect(first).toHaveProperty('lng');
-      expect(typeof first.lng).toBe('number');
-      expect(first).toHaveProperty('distanceMeters');
-      expect(typeof first.distanceMeters).toBe('number');
-      expect(first).toHaveProperty('lastSeenAt');
-      expect(typeof first.lastSeenAt).toBe('string');
-      expect(new Date(first.lastSeenAt).toString()).not.toBe('Invalid Date');
-    }
+    expect(res.body.drivers.length).toBeGreaterThanOrEqual(3);
+    const first = res.body.drivers[0];
+    expect(first).toHaveProperty('driverId');
+    expect(typeof first.driverId).toBe('string');
+    expect(first).toHaveProperty('lat');
+    expect(typeof first.lat).toBe('number');
+    expect(first).toHaveProperty('lng');
+    expect(typeof first.lng).toBe('number');
+    expect(first).toHaveProperty('distanceMeters');
+    expect(typeof first.distanceMeters).toBe('number');
+    expect(first).toHaveProperty('lastSeenAt');
+    expect(typeof first.lastSeenAt).toBe('string');
+    expect(new Date(first.lastSeenAt).toString()).not.toBe('Invalid Date');
   });
 
   it('rejects missing or non-numeric lat/lng with 400 and friendly message', async () => {
@@ -64,7 +99,7 @@ describe('GET /api/drivers/nearby', () => {
     const res = await request(app).get(`/api/drivers/nearby?lat=${centerLat}&lng=${centerLng}`);
     expect(res.status).toBe(200);
     const { drivers } = res.body;
-    expect(drivers.length).toBeGreaterThan(0);
+    expect(drivers.length).toBeGreaterThanOrEqual(3);
 
     for (let i = 0; i < drivers.length - 1; i += 1) {
       expect(drivers[i + 1].distanceMeters).toBeGreaterThanOrEqual(drivers[i].distanceMeters);
@@ -121,6 +156,70 @@ describe('GET /api/drivers/nearby', () => {
       await db.collection('DriverPings').deleteMany({
         driverId: { $in: [staleDriverId, inactiveDriverId] },
       });
+    }
+  });
+
+  it('does not show driver whose newest ping is inactive, even if older ping was active and in range', async () => {
+    const db = await getDb();
+    const driverId = 'driver-test-went-offline';
+
+    const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000);
+    const thirtySecAgo = new Date(Date.now() - 30 * 1000);
+
+    await db.collection('DriverPings').insertMany([
+      {
+        driverId,
+        active: true,
+        location: { type: 'Point', coordinates: [centerLng, centerLat] },
+        createdAt: twoMinAgo,
+      },
+      {
+        driverId,
+        active: false, // Driver went offline
+        location: { type: 'Point', coordinates: [centerLng, centerLat] },
+        createdAt: thirtySecAgo,
+      },
+    ]);
+
+    try {
+      const res = await request(app).get(`/api/drivers/nearby?lat=${centerLat}&lng=${centerLng}`);
+      expect(res.status).toBe(200);
+      const driverIds = res.body.drivers.map((d) => d.driverId);
+      expect(driverIds).not.toContain(driverId);
+    } finally {
+      await db.collection('DriverPings').deleteMany({ driverId });
+    }
+  });
+
+  it('does not show driver whose newest ping moved outside the radius, even if older ping was within range', async () => {
+    const db = await getDb();
+    const driverId = 'driver-test-moved-outside';
+
+    const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000);
+    const thirtySecAgo = new Date(Date.now() - 30 * 1000);
+
+    await db.collection('DriverPings').insertMany([
+      {
+        driverId,
+        active: true,
+        location: { type: 'Point', coordinates: [centerLng, centerLat] }, // inside
+        createdAt: twoMinAgo,
+      },
+      {
+        driverId,
+        active: true,
+        location: { type: 'Point', coordinates: [centerLng, centerLat + 0.15] }, // ~16.6 km away (outside)
+        createdAt: thirtySecAgo,
+      },
+    ]);
+
+    try {
+      const res = await request(app).get(`/api/drivers/nearby?lat=${centerLat}&lng=${centerLng}`);
+      expect(res.status).toBe(200);
+      const driverIds = res.body.drivers.map((d) => d.driverId);
+      expect(driverIds).not.toContain(driverId);
+    } finally {
+      await db.collection('DriverPings').deleteMany({ driverId });
     }
   });
 });

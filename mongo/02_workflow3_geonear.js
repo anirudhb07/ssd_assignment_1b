@@ -14,6 +14,29 @@ const restaurantLatitude = 12.9716;
 
 const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
 
+// Step 1: Find the latest ping ID per driver within the last 10 minutes
+const latestPings = db.DriverPings.aggregate([
+    {
+        $match: {
+            createdAt: { $gte: tenMinutesAgo }
+        }
+    },
+    {
+        $sort: {
+            createdAt: -1
+        }
+    },
+    {
+        $group: {
+            _id: "$driverId",
+            pingId: { $first: "$_id" }
+        }
+    }
+]).toArray();
+
+const pingIds = latestPings.map((l) => l.pingId);
+
+// Step 2: $geoNear matching only the latest ping per driver (if active and within 5 km)
 db.DriverPings.aggregate([
     {
         $geoNear: {
@@ -29,40 +52,19 @@ db.DriverPings.aggregate([
             maxDistance: 5000,
             spherical: true,
             query: {
-                active: true,
-                createdAt: { $gte: tenMinutesAgo }
+                _id: { $in: pingIds },
+                active: true
             }
-        }
-    },
-    // Sort newest pings first so $group picks each driver's latest location
-    {
-        $sort: {
-            createdAt: -1
-        }
-    },
-    // Deduplicate: latest ping per driver
-    {
-        $group: {
-            _id: "$driverId",
-            location: { $first: "$location" },
-            distanceMeters: { $first: "$distanceMeters" },
-            lastSeenAt: { $first: "$createdAt" }
-        }
-    },
-    // Sort all drivers within radius by distance (nearest first)
-    {
-        $sort: {
-            distanceMeters: 1
         }
     },
     {
         $project: {
             _id: 0,
-            driverId: "$_id",
+            driverId: 1,
             lat: { $arrayElemAt: ["$location.coordinates", 1] },
             lng: { $arrayElemAt: ["$location.coordinates", 0] },
             distanceMeters: { $round: ["$distanceMeters", 0] },
-            lastSeenAt: 1
+            lastSeenAt: "$createdAt"
         }
     }
 ]);
