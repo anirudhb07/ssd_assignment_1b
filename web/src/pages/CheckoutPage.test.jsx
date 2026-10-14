@@ -114,7 +114,10 @@ describe('Checkout', () => {
   });
 
   it('sends 0.3 for 0.1 + 0.2 and displays only the returned order/balance/audit data', async () => {
-    const { invalidate } = setup(); await choose(); await add(); await add('Toast'); await submit();
+    const { invalidate, client } = setup();
+    client.setQueryData(['audit', 'u1', { page: 1 }], { items: [] });
+    client.setQueryData(['audit', 'u2', { page: 1 }], { items: [] });
+    await choose(); await add(); await add('Toast'); await submit();
     expect(checkout).toHaveBeenCalledWith({ userId: 'u1', restaurantId: 'r1', amount: 0.3 });
     expect(await screen.findByText(/Order confirmed/)).toBeInTheDocument();
     expect(screen.getByText('order-real')).toBeInTheDocument();
@@ -124,6 +127,10 @@ describe('Checkout', () => {
     expect(screen.getAllByText('₹99.70')).toHaveLength(2);
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['users'] });
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['orders'] });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['user', 'u1'] });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['audit', 'u1'] });
+    expect(client.getQueryState(['audit', 'u1', { page: 1 }]).isInvalidated).toBe(true);
+    expect(client.getQueryState(['audit', 'u2', { page: 1 }]).isInvalidated).toBe(false);
     expect(screen.getByRole('link', { name: 'View order' })).toHaveAttribute('href', '/browse/orders/order-real');
     await userEvent.click(screen.getByRole('link', { name: 'View order' }));
     expect(screen.getByText('Order detail destination')).toBeInTheDocument();
@@ -151,7 +158,9 @@ describe('Checkout', () => {
   it('handles the former >5000 mock scenario with 402, top-up, and explicit retry', async () => {
     getMenu.mockResolvedValue({ categories: [{ name: 'Meals', items: [{ name: 'Meal', price: 5001, available: true }] }] });
     checkout.mockRejectedValueOnce(new ApiError(402, 'INSUFFICIENT_BALANCE', 'Not enough funds. Please top up.')).mockResolvedValue(success);
-    setup(); await choose(); await add('Meal'); await submit();
+    const { invalidate, client } = setup();
+    client.setQueryData(['audit', 'u1', { page: 1 }], { items: [] });
+    await choose(); await add('Meal'); await submit();
     expect(checkout).toHaveBeenCalledWith({ userId: 'u1', restaurantId: 'r1', amount: 5001 });
     expect(await screen.findByRole('alert')).toHaveTextContent('Not enough funds. Please top up.');
     await userEvent.click(screen.getByRole('button', { name: 'Top up' }));
@@ -166,6 +175,9 @@ describe('Checkout', () => {
     expect(await screen.findByText(/Top-up successful/)).toBeInTheDocument();
     expect(screen.getByText('audit-credit')).toBeInTheDocument();
     expect(topUpWallet).toHaveBeenCalledWith('u1', 100);
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['user', 'u1'] });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['audit', 'u1'] });
+    expect(client.getQueryState(['audit', 'u1', { page: 1 }]).isInvalidated).toBe(true);
     expect(checkout).toHaveBeenCalledTimes(1);
     await submit();
     expect(await screen.findByText(/Order confirmed/)).toBeInTheDocument();

@@ -79,7 +79,11 @@ function MenuAndCart({ menu, restaurant, customer, onChangeRestaurant }) {
   const total = lines.reduce((sum, line) => sum + line.subtotal, 0);
   const validTotal = lines.length > 0 && lines.every((line) => line.valid)
     && Number.isSafeInteger(total) && total > 0 && total <= MAX_PAISE;
-  const refreshWallet = () => Promise.all(['user', 'users', 'orders', 'order', 'audit', 'wallet', 'actor-picker'].map((key) => client.invalidateQueries({ queryKey: [key] })));
+  const refreshWallet = () => Promise.all([
+    ['user', customer.id],
+    ['audit', customer.id],
+    ['users'], ['orders'], ['order'], ['wallet'], ['actor-picker'],
+  ].map((queryKey) => client.invalidateQueries({ queryKey })));
   const payment = useMutation({
     mutationFn: (body) => checkout(body),
     onSuccess: () => { setCart({}); return refreshWallet(); },
