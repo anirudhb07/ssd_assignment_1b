@@ -12,11 +12,12 @@ const mockMenu = { restaurantId: 'r1', restaurantName: 'Restaurant-166', categor
   { name: 'Main Course', items: [{ name: 'Butter Chicken', price: 400, available: true, customizationAddOns: [{ name: 'Extra Spicy', price: 10 }, { name: 'Extra Naan', price: 50 }] }] },
 ] };
 import { ApiError } from '../api/client.js';
-import { checkout, getMenu, getUser, listRestaurants, topUpWallet } from '../api/endpoints.js';
+import { checkout, getMenu, getOrder, getUser, listRestaurants, topUpWallet } from '../api/endpoints.js';
 import { ActorProvider, useActor } from '../context/ActorContext.jsx';
 import { CheckoutPage } from './CheckoutPage.jsx';
+import { DetailPage } from './DetailPage.jsx';
 
-vi.mock('../api/endpoints.js', () => ({ checkout: vi.fn(), getMenu: vi.fn(), getUser: vi.fn(), listRestaurants: vi.fn(), topUpWallet: vi.fn() }));
+vi.mock('../api/endpoints.js', () => ({ checkout: vi.fn(), getMenu: vi.fn(), getUser: vi.fn(), listRestaurants: vi.fn(), topUpWallet: vi.fn(), getOrder: vi.fn(), advanceOrder: vi.fn(), getRestaurant: vi.fn(), listOrders: vi.fn() }));
 const restaurants = [{ id: 'r1', name: 'Cafe One', latitude: 13.048384606524099, longitude: 77.71833724119547 }, { id: 'r2', name: 'Cafe Two', latitude: 13, longitude: 78 }];
 const menu = { restaurantId: 'r1', categories: [{ name: 'Snacks', items: [
   { name: 'Tea', price: 0.1, available: true, customizationAddOns: [{ name: 'Milk', price: 0.2 }] },
@@ -37,7 +38,7 @@ function setup(customer = true) {
   const invalidate = vi.spyOn(client, 'invalidateQueries');
   render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/checkout']}><ActorProvider><SwitchCustomer /><Routes>
     <Route path="/checkout" element={<CheckoutPage />} />
-    <Route path="/browse/orders/:id" element={<p>Order detail destination</p>} />
+    <Route path="/browse/:entity/:id" element={<DetailPage />} />
   </Routes></ActorProvider></MemoryRouter></QueryClientProvider>);
   return { invalidate, client };
 }
@@ -51,6 +52,7 @@ beforeEach(() => {
   getMenu.mockResolvedValue(menu);
   getUser.mockResolvedValue({ id: 'u1', name: 'Customer One', walletBalance: 100, activeOrder: null });
   checkout.mockResolvedValue(success);
+  getOrder.mockImplementation((id) => Promise.resolve({ id, userId: 'u1', userName: 'Customer One', restaurantId: 'r1', restaurantName: 'Cafe One', totalAmount: 0.3, status: 'PREPARING', createdAt: debit.changedAt }));
   topUpWallet.mockResolvedValue(credit);
 });
 
@@ -137,7 +139,8 @@ describe('Checkout', () => {
     expect(client.getQueryState(['audit', 'u2', { page: 1 }]).isInvalidated).toBe(false);
     expect(screen.getByRole('link', { name: 'View order' })).toHaveAttribute('href', '/browse/orders/order-real');
     await userEvent.click(screen.getByRole('link', { name: 'View order' }));
-    expect(screen.getByText('Order detail destination')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Advance status' })).toBeEnabled();
+    expect(getOrder).toHaveBeenCalledWith('order-real');
   });
 
   it('requires an Acting as customer', async () => {
@@ -198,7 +201,8 @@ describe('Checkout', () => {
     expect(link).toHaveAttribute('href', '/browse/orders/active-42');
     expect(checkout).toHaveBeenCalledWith({ userId: 'u1', restaurantId: 'r1', amount: 0.1 });
     await userEvent.click(link);
-    expect(screen.getByText('Order detail destination')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Advance status' })).toBeEnabled();
+    expect(getOrder).toHaveBeenCalledWith('active-42');
   });
 
   it.each([[400, 'INVALID_AMOUNT'], [409, 'INVALID_TRANSITION'], [0, 'NETWORK'], [500, 'INTERNAL']])('shows %s %s without an invented active order', async (status, code) => {
