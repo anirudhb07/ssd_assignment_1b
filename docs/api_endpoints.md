@@ -38,7 +38,7 @@ The mapping from PostgreSQL errors lives in `api/src/lib/errors.js`.
 | `GET /health` | REAL | `SELECT 1`, Mongo `ping` | Home |
 | `GET /users` | REAL | `users` | Browse, actor switcher |
 | `GET /users/:id` | REAL | `users`, `orders` | Browse detail |
-| `GET /users/:id/audit` | MOCK | `wallet_audit_logs` | Wallet |
+| `GET /users/:id/audit` | REAL | `wallet_audit_logs` | Wallet |
 | `POST /users/:id/topup` | MOCK | `sp_wallet_topup` (to add) | Checkout |
 | `GET /restaurants` | REAL | `restaurants` | Browse, actor switcher |
 | `GET /restaurants/:id` | REAL | `restaurants`, `restaurant_order_summary` | Browse detail |
@@ -67,8 +67,9 @@ Item: `{ "id", "name", "walletBalance" }`
 `{ "id", "name", "walletBalance", "activeOrder": Order | null }`. `activeOrder` is the order in `PREPARING` or `DELIVERING`, if there is one.
 
 ### `GET /users/:id/audit?from=&to=&page=&pageSize=`
-`from` and `to` are dates (`2026-10-01`), both optional. Newest first.
+`from` and `to` are dates (`2026-10-01`), both optional and both included (`to=2026-10-12` covers that whole day). They are Indian calendar days (`Asia/Kolkata`), the same days the app shows. Newest first (`changed_at`, then `seq`, both descending).
 Item: `{ "id", "changedAt", "actionType": "DEBIT" | "CREDIT", "amountChanged", "balanceAfter" }`
+`400 BAD_REQUEST` if a date isn't a real `YYYY-MM-DD` date or `from` is after `to`; `404` if the customer doesn't exist; an empty list if the range has no entries.
 
 ### `POST /users/:id/topup`
 Body: `{ "amount": 1000 }`
