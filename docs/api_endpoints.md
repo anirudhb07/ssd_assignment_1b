@@ -51,7 +51,7 @@ The mapping from PostgreSQL errors lives in `api/src/lib/errors.js`.
 | `GET /analytics/ranking` | MOCK | Window query, `DENSE_RANK()` | Analytics |
 | `GET /analytics/summary` | MOCK | `restaurant_order_summary` + refresh log | Analytics |
 | `POST /analytics/summary/refresh` | MOCK | `sp_refresh_restaurant_summary` | Analytics |
-| `GET /drivers/nearby` | MOCK | Mongo `$geoNear`, `mongo/02` | Map |
+| `GET /drivers/nearby` | REAL | Mongo `$geoNear`, `mongo/02` | Map |
 | `GET /reviews/stats` | REAL | Mongo `$facet`, `mongo/03` | Reviews |
 
 ## Details

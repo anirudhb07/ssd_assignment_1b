@@ -191,7 +191,7 @@ Every endpoint in `docs/api_endpoints.md` already answers. Routes marked `MOCK` 
 
 - Mock responses carry the header `X-Mock: true`, and the browser console logs `[mock data] GET /users`.
 - Checkout's mock can show both failures: an amount over 5000 returns `402 INSUFFICIENT_BALANCE`, and `?simulate=active-order` returns `409 ACTIVE_ORDER_EXISTS`.
-- Real so far: `GET /health`, `GET /users`, `GET /users/:id`, `GET /users/:id/audit`, `GET /orders`, `GET /orders/:id`, `GET /restaurants`, `GET /restaurants/:id`, `GET /reviews/stats`.
+- Real so far: `GET /health`, `GET /users`, `GET /users/:id`, `GET /users/:id/audit`, `GET /orders`, `GET /orders/:id`, `GET /restaurants`, `GET /restaurants/:id`, `GET /reviews/stats`, `GET /drivers/nearby`.
 
 ### Building a screen
 
