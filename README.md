@@ -247,6 +247,31 @@ docker compose exec api npm test   # API: error mapping (unit) + endpoints again
 docker compose exec web npm test   # Web: component tests with Testing Library
 ```
 
+The issue #9 database regression script runs against an initialized PostgreSQL database and rolls back its fixtures. With Docker running, use this from PowerShell:
+
+```powershell
+Get-Content -Raw sql/tests/order_status_and_topup.sql | docker compose exec -T postgres psql -X -U postgres -d bitestream -v ON_ERROR_STOP=1
+```
+
+macOS, Linux or WSL:
+
+```bash
+docker compose exec -T postgres psql -X -U postgres -d bitestream -v ON_ERROR_STOP=1 < sql/tests/order_status_and_topup.sql
+```
+
+Or with a local psql connection: `psql -X -d bitestream -v ON_ERROR_STOP=1 -f sql/tests/order_status_and_topup.sql`.
+The script checks both procedures, their errors, exact CREDIT audit rows, and checkout before and after delivery.
+
+Example calls (replace the UUID placeholders with existing IDs):
+
+```sql
+CALL sp_wallet_topup('USER_UUID', 100.00);
+CALL sp_advance_order_status('ORDER_UUID'); -- PREPARING -> DELIVERING
+CALL sp_advance_order_status('ORDER_UUID'); -- DELIVERING -> DELIVERED
+```
+
+Top-ups must be positive and finite, and round to at least 0.01. Values are rounded to two decimal places to match the wallet; exceeding its `DECIMAL(10,2)` capacity fails without changing the wallet or audit history. Both procedures participate in the caller's transaction.
+
 ### Git workflow
 
 - Never commit straight to `main`. Make a branch per task: `git checkout -b feature/checkout-form`.
@@ -318,6 +343,7 @@ ssd_assignment_1b/
 
 | Change | Files | Why |
 | --- | --- | --- |
+| Order status advance and wallet top-up (issue #9) | `sql/07_order_status_and_topup.sql`, `sql/tests/order_status_and_topup.sql` | Adds forward-only status transitions and atomic wallet credits through the existing audit trigger. Enables ordering again after delivery and recovering from insufficient balance. Apply with `docker compose run --rm seed`; no reset needed. |
 | Docker development environment | `docker-compose.yml`, `docker/seed/`, `.env.example`, `.dockerignore` | One command gives everyone the same databases and seeded data. |
 | Unix line endings for shell scripts | `.gitattributes` | The seed script must run in Linux containers when checked out on Windows. |
 | README restructured | `README.md` | Added setup, team workflow and Assignment 2 sections; Assignment 1 text kept unchanged below. |
