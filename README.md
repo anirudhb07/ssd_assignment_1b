@@ -253,6 +253,12 @@ The issue #9 database regression script runs against an initialized PostgreSQL d
 Get-Content -Raw sql/tests/order_status_and_topup.sql | docker compose exec -T postgres psql -X -U postgres -d bitestream -v ON_ERROR_STOP=1
 ```
 
+macOS, Linux or WSL:
+
+```bash
+docker compose exec -T postgres psql -X -U postgres -d bitestream -v ON_ERROR_STOP=1 < sql/tests/order_status_and_topup.sql
+```
+
 Or with a local psql connection: `psql -X -d bitestream -v ON_ERROR_STOP=1 -f sql/tests/order_status_and_topup.sql`.
 The script checks both procedures, their errors, exact CREDIT audit rows, and checkout before and after delivery.
 
