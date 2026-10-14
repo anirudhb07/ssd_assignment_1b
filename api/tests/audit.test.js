@@ -160,14 +160,18 @@ describe('GET /api/users/:id/audit', () => {
   it('rejects bad dates with a readable message', async () => {
     const c = await busyCustomer();
     const get = (q) => request(app).get(`/api/users/${c.userId}/audit?${q}`);
-    const [reversed, impossible, format] = await Promise.all([
+    const [reversed, impossible, badMonth, format] = await Promise.all([
       get('from=2026-10-05&to=2026-10-01'),
       get('from=2026-02-30'),
+      get('from=2026-13-45'),
       get('to=12-10-2026'),
     ]);
     expect(reversed.status).toBe(400);
     expect(reversed.body.error.message).toBe('The start date must be on or before the end date.');
     expect(impossible.status).toBe(400);
+    // Used to be a 500: an impossible month made the date check itself throw.
+    expect(badMonth.status).toBe(400);
+    expect(badMonth.body.error.message).toBe('The start date must look like 2026-10-01.');
     expect(format.status).toBe(400);
     expect(format.body.error.message).toContain('end date');
   });

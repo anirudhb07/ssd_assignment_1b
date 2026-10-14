@@ -53,8 +53,12 @@ const AUDIT_TIME_ZONE = 'Asia/Kolkata';
 function parseDay(value, label) {
   if (value == null || value === '') return null;
   const text = String(value);
+  // An impossible month (2026-13-45) is an Invalid Date, whose toISOString()
+  // throws, so check for that before comparing.
+  const date = new Date(`${text}T00:00:00Z`);
   const valid = /^\d{4}-\d{2}-\d{2}$/.test(text)
-    && new Date(`${text}T00:00:00Z`).toISOString().startsWith(text);
+    && !Number.isNaN(date.getTime())
+    && date.toISOString().startsWith(text);
   if (!valid) throw badRequest(`The ${label} date must look like 2026-10-01.`);
   return text;
 }
