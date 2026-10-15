@@ -47,10 +47,10 @@ The mapping from PostgreSQL errors lives in `api/src/lib/errors.js`.
 | `GET /orders/:id` | REAL | `orders` | Browse detail |
 | `POST /orders/:id/advance` | REAL | `sp_advance_order_status` | Browse detail |
 | `POST /checkout` | REAL | `sp_execute_checkout` | Checkout |
-| `GET /analytics/revenue` | MOCK | Window query, `sql/06` | Analytics |
-| `GET /analytics/ranking` | MOCK | Window query, `DENSE_RANK()` | Analytics |
-| `GET /analytics/summary` | MOCK | `restaurant_order_summary` + refresh log | Analytics |
-| `POST /analytics/summary/refresh` | MOCK | `sp_refresh_restaurant_summary` | Analytics |
+| `GET /analytics/revenue` | REAL | `fn_restaurant_revenue_trend` (`sql/09`) | Analytics |
+| `GET /analytics/ranking` | REAL | `fn_restaurant_revenue_ranking` (`sql/09`, `DENSE_RANK()`) | Analytics |
+| `GET /analytics/summary` | REAL | `restaurant_order_summary` + `restaurant_summary_refresh_log` (`sql/09`) | Analytics |
+| `POST /analytics/summary/refresh` | REAL | `sp_refresh_restaurant_summary` (`sql/09`) | Analytics |
 | `GET /drivers/nearby` | REAL | Mongo `$geoNear`, `mongo/02` | Map |
 | `GET /reviews/stats` | REAL | Mongo `$facet`, `mongo/03` | Reviews |
 
@@ -117,9 +117,11 @@ Checkout and top-up amounts must be positive JSON numbers with at most two decim
 
 ### `GET /analytics/revenue?restaurantId=`
 `{ "restaurantId", "restaurantName", "points": [ { "date": "2026-09-12", "dailyRevenue", "movingAvg7d" } ] }`, oldest first.
+`restaurantId` is optional; without it, the top-ranked restaurant is used. `movingAvg7d` is the average of `dailyRevenue` over the days that have delivered orders in the 7 days up to and including that date (days with no orders are not counted as zeros). Dates are `DATE(created_at)`, as in `sql/06`.
+`400 BAD_REQUEST` if `restaurantId` isn't a valid ID; `404 NOT_FOUND` if the restaurant doesn't exist.
 
 ### `GET /analytics/ranking?page=&pageSize=`
-Item: `{ "rank", "restaurantId", "restaurantName", "totalRevenue" }`, best first. Ties share a rank (`DENSE_RANK`).
+Item: `{ "rank", "restaurantId", "restaurantName", "totalRevenue" }`, best first. Ties share a rank (`DENSE_RANK`). Restaurants with no delivered orders are left out. Revenue comes from `restaurant_order_summary`, so it is as fresh as the last refresh.
 
 ### `GET /analytics/summary` and `POST /analytics/summary/refresh`
 ```json
@@ -129,6 +131,7 @@ Item: `{ "rank", "restaurantId", "restaurantName", "totalRevenue" }`, best first
   "topRestaurants": [ { "restaurantId", "restaurantName", "completedOrderCount", "completedRevenue" } ]
 }
 ```
+`lastRefreshedAt` is `null` until the first refresh through `sp_refresh_restaurant_summary()` is logged (the seeder's own refresh isn't). `topRestaurants` lists the top 5 by revenue.
 `POST .../refresh` runs `CALL sp_refresh_restaurant_summary()` and returns the same shape.
 
 ### `GET /drivers/nearby?lat=&lng=&radius=5000`
