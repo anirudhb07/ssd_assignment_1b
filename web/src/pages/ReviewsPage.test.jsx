@@ -131,6 +131,16 @@ describe('ReviewsPage', () => {
     expect(screen.getByText('4.2 ★')).toBeTruthy();
   });
 
+  it('shows the error for a bad id and does not leave the picker on "Selected restaurant"', async () => {
+    const message = 'Restaurant ID must be a valid UUID.';
+    endpoints.getReviewStats.mockRejectedValue(new Error(message));
+    endpoints.getMenu.mockRejectedValue(Object.assign(new Error(message), { status: 400 }));
+    renderPage('/reviews?restaurantId=not-an-id');
+
+    expect((await screen.findAllByText(message)).length).toBeGreaterThan(0);
+    expect(screen.getByTestId('picker').textContent).toBe('Choose a restaurant');
+  });
+
   it('shows the error message with "Try again" when the stats fail', async () => {
     endpoints.getReviewStats.mockRejectedValue(new Error('Cannot reach the API. Check that it is running.'));
     renderPage('/reviews');

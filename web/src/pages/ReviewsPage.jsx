@@ -46,7 +46,11 @@ export function ReviewsPage() {
     retry: retryUnlessNotFound,
   });
 
-  const selected = restaurantId
+  // If the id was rejected (for example a bad id in the link), there is no
+  // restaurant to show, so the picker goes back to "Choose a restaurant".
+  // A menu 404 is not a rejection: the restaurant exists, it just has no menu.
+  const idRejected = stats.isError || (menu.isError && menu.error?.status !== 404);
+  const selected = restaurantId && !idRejected
     ? { id: restaurantId, name: pickedName || menu.data?.restaurantName || 'Selected restaurant' }
     : null;
 
@@ -105,7 +109,7 @@ function StatsSection({ data }) {
         </Card>
       </div>
 
-      <div style={grid(360)}>
+      <div style={{ ...grid(360), alignItems: 'start' }}>
         <Card title="Rating distribution">
           <div style={{ width: '100%', height: 280 }}>
             <ResponsiveContainer>
@@ -181,7 +185,7 @@ function MenuSection({ restaurantId, menu }) {
                 {data.restaurantName}: {itemCount} {itemCount === 1 ? 'item' : 'items'} in {data.categories.length}{' '}
                 {data.categories.length === 1 ? 'category' : 'categories'}.
               </p>
-              <div style={grid(300)}>
+              <div style={{ ...grid(300), alignItems: 'start' }}>
                 {data.categories.map((category) => (
                   <Card key={category.name} title={category.name}>
                     <div className="stack">
