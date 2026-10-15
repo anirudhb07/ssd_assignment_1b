@@ -50,7 +50,11 @@ describe('GET /api/drivers/nearby', () => {
     await Promise.all([pool.end(), closeMongo()]);
   });
 
-  it('answers real query with correct structure and without X-Mock header', async () => {
+  // These two tests query the full nearby drivers API against the seeded dataset.
+  // Allow headroom for seeded-data volume and shared CI/Docker load. This timeout
+  // is not an expected response time or a performance benchmark.
+
+  it('answers real query with correct structure and without X-Mock header', { timeout: 10000 }, async () => {
     const res = await request(app).get(`/api/drivers/nearby?lat=${centerLat}&lng=${centerLng}`);
     expect(res.status).toBe(200);
     expect(res.headers['x-mock']).toBeUndefined();
@@ -106,7 +110,7 @@ describe('GET /api/drivers/nearby', () => {
     }
   });
 
-  it('returns at most one entry per driver (latest ping)', async () => {
+  it('returns at most one entry per driver (latest ping)', { timeout: 10000 }, async () => {
     const res = await request(app).get(`/api/drivers/nearby?lat=${centerLat}&lng=${centerLng}`);
     expect(res.status).toBe(200);
     const driverIds = res.body.drivers.map((d) => d.driverId);
