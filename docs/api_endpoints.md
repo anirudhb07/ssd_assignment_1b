@@ -76,7 +76,7 @@ Body: `{ "amount": 1000 }`
 `200 { "walletBalance", "auditEntry": AuditEntry }`
 
 ### `GET /restaurants?search=&page=&pageSize=`
-Item: `{ "id", "name", "latitude", "longitude" }`, sorted by name.
+Item: `{ "id", "name", "latitude", "longitude", "completedOrderCount", "completedRevenue" }`, sorted by name. The two totals come from `restaurant_order_summary` (0 for a restaurant not in it yet), so they are as fresh as its last refresh.
 
 ### `GET /restaurants/:id`
 `{ "id", "name", "latitude", "longitude", "summary": { "completedOrderCount", "completedRevenue" } }`

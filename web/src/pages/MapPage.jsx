@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useEffect, useMemo, useState } from 'react';
-import { Circle, MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet';
+import { Circle, MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import { getNearbyDrivers, listRestaurants } from '../api/endpoints.js';
 import {
   Button, Card, EmptyState, ErrorState, PageHeader, QueryState, SelectField, Stat, TextField,
@@ -19,13 +19,23 @@ const restaurantIcon = L.divIcon({
   popupAnchor: [0, -14],
 });
 
-const driverIcon = L.divIcon({
+// Driver markers carry their place in the list (1 = nearest), so a marker
+// and its row in "Nearby Drivers" can be matched at a glance.
+const driverIcon = (n) => L.divIcon({
   className: 'custom-driver-icon',
-  html: '<div style="background-color: var(--color-accent, #d98a1c); width: 22px; height: 22px; border-radius: 50%; border: 2px solid #ffffff; box-shadow: 0 2px 4px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; font-size: 11px;">🛵</div>',
-  iconSize: [22, 22],
-  iconAnchor: [11, 11],
-  popupAnchor: [0, -11],
+  html: `<div class="driver-pin">${n}</div>`,
+  iconSize: [26, 26],
+  iconAnchor: [13, 13],
+  popupAnchor: [0, -13],
 });
+
+// Clicking the map moves the origin there.
+function PickOrigin({ onPick }) {
+  useMapEvents({ click: (e) => onPick({ lat: e.latlng.lat, lng: e.latlng.lng }) });
+  return null;
+}
+
+const inRange = (value, limit) => value !== '' && Number.isFinite(Number(value)) && Math.abs(Number(value)) <= limit;
 
 // Updates the map view ONLY when the origin coordinates change (e.g. user picks a new restaurant).
 // Prevents resetting pan/zoom on 5-second polling refetches.
@@ -66,13 +76,26 @@ export function MapPage() {
     return restaurants[0] ?? null;
   }, [restaurants, selectedId]);
 
+  // A point picked on the map or typed in replaces the restaurant as origin.
+  const [customOrigin, setCustomOrigin] = useState(null);
+  const [latInput, setLatInput] = useState('');
+  const [lngInput, setLngInput] = useState('');
+  const validInput = inRange(latInput, 90) && inRange(lngInput, 180);
+  const pick = (point) => {
+    setCustomOrigin(point);
+    setLatInput(point.lat.toFixed(4));
+    setLngInput(point.lng.toFixed(4));
+  };
+
   const origin = useMemo(() => {
+    if (customOrigin) return customOrigin;
     if (!currentRestaurant) return null;
     return {
       lat: currentRestaurant.latitude,
       lng: currentRestaurant.longitude,
     };
-  }, [currentRestaurant]);
+  }, [customOrigin, currentRestaurant]);
+  const originName = customOrigin ? 'Custom point' : currentRestaurant?.name;
 
   // Nearby drivers query: polls every 5 seconds (5000 ms)
   const driversQuery = useQuery({
@@ -94,7 +117,8 @@ export function MapPage() {
     <div className="stack">
       <PageHeader
         title="Map"
-        description="Live drivers within 5 km of a restaurant. Updates automatically every 5 seconds."
+        description="Live drivers within 5 km of a restaurant or any point you choose."
+        actions={<span className="live-badge">Live · every 5 s</span>}
       />
 
       {/* Controls row: Filter restaurant & refresh */}
@@ -114,7 +138,7 @@ export function MapPage() {
               id="restaurant-select"
               label="Origin restaurant"
               value={currentRestaurant?.id ?? ''}
-              onChange={(e) => setSelectedId(e.target.value)}
+              onChange={(e) => { setSelectedId(e.target.value); setCustomOrigin(null); }}
               options={restaurantOptions}
               placeholder={restaurantsQuery.isLoading ? 'Loading restaurants…' : 'Select a restaurant'}
             />
@@ -159,7 +183,24 @@ export function MapPage() {
       {/* Main View: Map + Sidebar list, wrapped in QueryState. The drivers
           query waits for an origin, so without one say why instead of
           showing "Loading…" forever. */}
-      {restaurantsQuery.isError ? (
+      <Card>
+        <form
+          className="row"
+          style={{ alignItems: 'flex-end' }}
+          onSubmit={(e) => { e.preventDefault(); if (validInput) pick({ lat: Number(latInput), lng: Number(lngInput) }); }}
+        >
+          <TextField id="origin-lat" label="Latitude" inputMode="decimal" placeholder="e.g. 12.9716" value={latInput} onChange={(e) => setLatInput(e.target.value)} />
+          <TextField id="origin-lng" label="Longitude" inputMode="decimal" placeholder="e.g. 77.5946" value={lngInput} onChange={(e) => setLngInput(e.target.value)} />
+          <Button type="submit" variant="secondary" disabled={!validInput}>Set origin</Button>
+          {customOrigin && <Button variant="secondary" onClick={() => { setCustomOrigin(null); setLatInput(''); setLngInput(''); }}>Back to restaurant</Button>}
+        </form>
+        <p className="muted small">
+          Origin: <strong>{originName ?? '—'}</strong>
+          {origin && ` (${origin.lat.toFixed(4)}, ${origin.lng.toFixed(4)})`}. Click the map, or type a point, to search around it.
+        </p>
+      </Card>
+
+      {restaurantsQuery.isError && !customOrigin ? (
         <ErrorState error={restaurantsQuery.error} onRetry={() => restaurantsQuery.refetch()} />
       ) : restaurantsQuery.isSuccess && !origin ? (
         <EmptyState title="No restaurants match" message="Try a different name in Filter restaurants." />
@@ -194,6 +235,7 @@ export function MapPage() {
                       url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     />
                     <RecenterMap lat={resolvedOrigin.lat} lng={resolvedOrigin.lng} radiusMeters={radiusMeters} />
+                    <PickOrigin onPick={pick} />
   
                     {/* 5 km Radius Circle */}
                     <Circle
@@ -213,7 +255,7 @@ export function MapPage() {
                       icon={restaurantIcon}
                     >
                       <Popup>
-                        <strong>{currentRestaurant?.name || 'Selected Origin'}</strong>
+                        <strong>{originName || 'Selected Origin'}</strong>
                         <div className="small muted">
                           {resolvedOrigin.lat.toFixed(4)}, {resolvedOrigin.lng.toFixed(4)}
                         </div>
@@ -221,11 +263,11 @@ export function MapPage() {
                     </Marker>
   
                     {/* Driver Markers */}
-                    {driverList.map((d) => (
+                    {driverList.map((d, index) => (
                       <Marker
                         key={d.driverId}
                         position={[d.lat, d.lng]}
-                        icon={driverIcon}
+                        icon={driverIcon(index + 1)}
                       >
                         <Popup>
                           <strong>{d.driverId}</strong>

@@ -7,6 +7,7 @@ import { ActorProvider } from './context/ActorContext.jsx';
 import './styles/tokens.css';
 import './styles/base.css';
 import './styles/components.css';
+import './styles/screens.css';
 
 const queryClient = new QueryClient({
   defaultOptions: {

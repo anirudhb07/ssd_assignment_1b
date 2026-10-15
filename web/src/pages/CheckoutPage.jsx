@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
-import { Link } from 'react-router';
-import { checkout, getMenu, getUser, listRestaurants, topUpWallet } from '../api/endpoints.js';
+import { Link, useSearchParams } from 'react-router';
+import { checkout, getMenu, getRestaurant, getUser, listRestaurants, topUpWallet } from '../api/endpoints.js';
 import { Button, Card, EmptyState, PageHeader, Pagination, QueryState, Stat, StatusBadge, TextField } from '../components/ui/index.js';
 import { useActor } from '../context/ActorContext.jsx';
 import { useDebouncedValue } from '../hooks/useDebouncedValue.js';
@@ -17,8 +17,24 @@ export function CheckoutPage() {
   return <CheckoutSession key={customer?.id ?? 'no-customer'} customer={customer} />;
 }
 
+// A numbered step heading. The number is hidden from screen readers, so the
+// heading's name stays "Your cart" etc.
+function Step({ n, children }) {
+  return <span className="step"><span className="step__n" aria-hidden="true">{n}</span>{children}</span>;
+}
+
 function CheckoutSession({ customer }) {
-  const [restaurant, setRestaurant] = useState(null);
+  // /checkout?restaurantId=… (from a restaurant page or Reviews) opens that
+  // restaurant's menu straight away.
+  const [params, setParams] = useSearchParams();
+  const linkedId = params.get('restaurantId') ?? '';
+  const [chosen, setChosen] = useState(null);
+  const linked = useQuery({ queryKey: ['restaurant', linkedId], queryFn: () => getRestaurant(linkedId), enabled: Boolean(linkedId) && !chosen });
+  const restaurant = chosen ?? (linkedId ? linked.data ?? null : null);
+  const setRestaurant = (entry) => {
+    setChosen(entry);
+    if (!entry && linkedId) setParams({}, { replace: true });
+  };
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const debounced = useDebouncedValue(search);
@@ -30,20 +46,46 @@ function CheckoutSession({ customer }) {
   return <div className="checkout-page stack">
     <PageHeader title="Checkout" description="Choose a restaurant, build your cart and pay from your wallet." />
     {!customer && <p className="alert alert--info">Choose a customer in the Acting as switcher to place an order.</p>}
-    {!restaurant ? <Card title="Choose a restaurant">
-      <TextField label="Search restaurants" type="search" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} />
-      <QueryState query={restaurants} isEmpty={(data) => !data.items.length} emptyTitle="No restaurants found">
-        {(data) => <>
-          {data.items.map((entry) => <div className="checkout-line" key={entry.id}>
-            <h3>{entry.name}</h3>
-            <p className="muted small">Location: {entry.latitude.toFixed(4)}, {entry.longitude.toFixed(4)}</p>
-            <Button variant="secondary" onClick={() => setRestaurant(entry)} aria-label={`Choose ${entry.name}`}>View menu</Button>
-          </div>)}
-          <Pagination page={data.page} pageSize={data.pageSize} total={data.total} onPageChange={setPage} />
-        </>}
-      </QueryState>
-    </Card> : <RestaurantCheckout key={restaurant.id} restaurant={restaurant} customer={customer} onChangeRestaurant={() => setRestaurant(null)} />}
+    {restaurant ? <RestaurantCheckout key={restaurant.id} restaurant={restaurant} customer={customer} onChangeRestaurant={() => setRestaurant(null)} />
+      : linkedId ? <>
+        <QueryState query={linked} loadingLabel="Loading restaurant…">{() => null}</QueryState>
+        <Button variant="secondary" onClick={() => setRestaurant(null)}>Choose another restaurant</Button>
+      </>
+      : <div className="with-aside">
+        <Card title={<Step n={1}>Choose a restaurant</Step>}>
+          <TextField label="Search restaurants" type="search" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} />
+          <QueryState query={restaurants} isEmpty={(data) => !data.items.length} emptyTitle="No restaurants found">
+            {(data) => <>
+              <div className="choice-grid">
+                {data.items.map((entry) => <div className="choice-tile" key={entry.id}>
+                  <div>
+                    <strong>{entry.name}</strong>
+                    {entry.completedOrderCount != null && <p className="muted small">{entry.completedOrderCount.toLocaleString('en-IN')} orders delivered</p>}
+                  </div>
+                  <Button variant="secondary" onClick={() => setRestaurant(entry)} aria-label={`Choose ${entry.name}`}>View menu</Button>
+                </div>)}
+              </div>
+              <Pagination page={data.page} pageSize={data.pageSize} total={data.total} onPageChange={setPage} />
+            </>}
+          </QueryState>
+        </Card>
+        <WalletPanel customer={customer} />
+      </div>}
   </div>;
+}
+
+// Beside the restaurant list: what the customer has to spend.
+function WalletPanel({ customer }) {
+  const user = useQuery({ queryKey: ['user', customer?.id], queryFn: () => getUser(customer.id), enabled: !!customer });
+  return <Card title="Your wallet">
+    {!customer ? <p className="muted small">No customer chosen.</p>
+      : <QueryState query={user} loadingLabel="Loading wallet…">{(data) => <>
+        <Stat label="Available balance" value={formatMoney(data.walletBalance)} hint={data.name} />
+        {data.activeOrder && <p className="alert alert--info">This customer already has an order in progress, so a new order will be refused until it is delivered.</p>}
+        <p className="muted small">You can top up if an order needs more than this.</p>
+        <Link to={`/wallet?userId=${data.id}`} className="small">Wallet history</Link>
+      </>}</QueryState>}
+  </Card>;
 }
 
 function RestaurantCheckout({ restaurant, customer, onChangeRestaurant }) {
@@ -52,7 +94,7 @@ function RestaurantCheckout({ restaurant, customer, onChangeRestaurant }) {
     <header className="page-header">
       <div className="page-header__text">
         <h2>{restaurant.name}</h2>
-        <p className="muted">Location: {restaurant.latitude.toFixed(4)}, {restaurant.longitude.toFixed(4)}</p>
+        <p className="muted small">Add items to your cart, then place the order. It is paid from the wallet.</p>
       </div>
     </header>
     <QueryState query={menu} isEmpty={(data) => !menuItems(data).length} emptyTitle="No menu items yet" emptyMessage="There is nothing to order from this restaurant yet.">
@@ -154,7 +196,7 @@ function MenuAndCart({ menu, restaurant, customer, onChangeRestaurant }) {
       <Card><Stat label="Estimated balance after" value={formatMoney((Math.round(data.walletBalance * 100) - total) / 100)} hint="The server confirms your balance when you place the order." /></Card>
     </div>}</QueryState>}
     <div className="checkout-layout">
-      <Card title="Menu">
+      <Card title={<Step n={2}>Menu</Step>}>
         <fieldset disabled={busy} className="stack">
           {(menu.categories ?? []).map((category, ci) => <section className="stack" key={ci} aria-label={category.name}>
             <h3>{category.name}</h3>
@@ -167,7 +209,7 @@ function MenuAndCart({ menu, restaurant, customer, onChangeRestaurant }) {
           </section>)}
         </fieldset>
       </Card>
-      <Card title="Your cart">
+      <Card title={<Step n={3}>Your cart</Step>}>
         {!lines.length && <EmptyState title="Your cart is empty" message="Add an available item from the menu." />}
         <fieldset disabled={busy}>
           {lines.map((line) => <article className="checkout-line" key={line.key} aria-label={`Cart ${line.item?.name ?? 'Unavailable item'}`}>

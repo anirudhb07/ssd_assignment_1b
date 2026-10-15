@@ -6,7 +6,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useParams } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { listOrders, listUsers } from '../api/endpoints.js';
+import { listOrders, listRestaurants, listUsers } from '../api/endpoints.js';
 import { BrowsePage } from './BrowsePage.jsx';
 
 vi.mock('../api/endpoints.js', () => ({
@@ -45,6 +45,23 @@ beforeEach(() => {
   vi.clearAllMocks();
   listUsers.mockResolvedValue(page([user], 10000));
   listOrders.mockResolvedValue(page([order], 120000));
+});
+
+describe('Restaurants tab', () => {
+  it('lists restaurants with their delivered orders and revenue, and opens one', async () => {
+    listRestaurants.mockResolvedValue(page([
+      { id: 'r1', name: 'Restaurant-166', latitude: 12.97, longitude: 77.59, completedOrderCount: 1234, completedRevenue: 354950 },
+    ], 500));
+    renderAt('/browse');
+    const table = within(await screen.findByRole('table'));
+    expect(table.getByText('1,234')).toBeInTheDocument();
+    expect(table.getByText('₹3,54,950')).toBeInTheDocument();
+    expect(table.queryByText('12.9700')).not.toBeInTheDocument(); // coordinates are on the restaurant page
+    expect(table.getByText('View ›')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'New order' })).toHaveAttribute('href', '/checkout');
+    await userEvent.click(table.getByText('Restaurant-166'));
+    expect(screen.getByText('Detail of restaurants r1')).toBeInTheDocument();
+  });
 });
 
 describe('Users tab', () => {

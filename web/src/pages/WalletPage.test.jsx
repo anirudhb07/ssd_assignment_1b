@@ -96,8 +96,10 @@ describe('history', () => {
     const table = within(await screen.findByRole('table'));
     expect(table.getByText('Debit')).toBeInTheDocument();
     expect(table.getByText('Credit')).toBeInTheDocument();
-    expect(table.getByText('₹1,526')).toBeInTheDocument();
-    expect(table.getAllByText('₹60,278')).toHaveLength(2); // the opening credit: amount and balance after
+    // Signed and coloured by direction (debits red with −, credits green with +).
+    expect(table.getByText('−₹1,526')).toHaveClass('amount--debit');
+    expect(table.getByText('+₹60,278')).toHaveClass('amount--credit');
+    expect(table.getByText('₹60,278')).toBeInTheDocument(); // the opening credit's balance after
     expect(statValue('Entries')).toHaveTextContent('24');
     expect(screen.getByRole('navigation', { name: 'Pagination' })).toHaveTextContent('1–20 of 24');
   });

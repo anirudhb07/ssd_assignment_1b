@@ -1,0 +1,65 @@
+/*
+ * Small pieces shared by several screens. Colours come from tokens.css only.
+ */
+
+/* Main nav: a gap between the customer screens and the staff screens. */
+.app-nav a.app-nav__group-start { margin-left: var(--space-4); }
+@media (max-width: 640px) { .app-nav a.app-nav__group-start { margin-left: 0; } }
+
+/* Signed wallet amounts: +₹1,000.00 in green, −₹743.11 in red. */
+.amount--credit { color: var(--color-success); font-weight: 600; }
+.amount--debit { color: var(--color-danger); font-weight: 600; }
+
+/* "View ›" at the end of a clickable table row, so it looks clickable. */
+.row-open { color: var(--color-primary); font-weight: 600; }
+
+/* A numbered step heading, e.g. "① Choose a restaurant". */
+.step { display: inline-flex; align-items: center; gap: var(--space-2); }
+.step__n {
+  display: inline-grid; place-items: center;
+  width: 1.6em; height: 1.6em; border-radius: 50%;
+  background: var(--color-primary-soft); color: var(--color-primary);
+  font-size: var(--text-sm); font-weight: 700;
+}
+
+/* "Live · every 5 s" next to a page title. */
+.live-badge {
+  display: inline-flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-1) var(--space-3); border-radius: 999px;
+  background: var(--color-success-soft); color: var(--color-success);
+  font-size: var(--text-sm); font-weight: 600;
+}
+.live-badge::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+
+/* Filter chips (menu categories, chart ranges). aria-pressed marks the chosen one. */
+.chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.chips button {
+  font: inherit; font-size: var(--text-sm); cursor: pointer;
+  padding: var(--space-1) var(--space-3); border-radius: 999px;
+  border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text);
+}
+.chips button[aria-pressed='true'] { border-color: var(--color-primary); background: var(--color-primary-soft); color: var(--color-primary); font-weight: 600; }
+
+/* A headline figure above a chart: date, value, average. */
+.readout { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2) var(--space-5); font-size: var(--text-sm); }
+.readout strong { font-size: var(--text-lg); font-variant-numeric: tabular-nums; }
+.readout .readout__avg strong { color: var(--color-accent); }
+
+/* Checkout: restaurants as a compact grid of tiles. */
+.choice-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr)); gap: var(--space-3); }
+.choice-tile {
+  display: grid; gap: var(--space-2); align-content: space-between;
+  padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-bg);
+}
+
+/* Checkout: page content beside a wallet panel. */
+.with-aside { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 280px); gap: var(--space-5); align-items: start; }
+/* On narrow screens the wallet goes above the list, where it can be seen. */
+@media (max-width: 900px) { .with-aside { grid-template-columns: minmax(0, 1fr); } .with-aside > :last-child { order: -1; } }
+
+/* Map: numbered driver markers that match the numbered list. */
+.driver-pin {
+  display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%;
+  background: var(--color-primary); color: #fff; border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.35); font: 700 12px/1 var(--font-sans);
+}

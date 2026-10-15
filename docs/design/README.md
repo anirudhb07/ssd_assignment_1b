@@ -12,6 +12,19 @@ Wireframes, users and the visual style for BiteStream. Each person draws the wir
 
 The header's "Acting as" switcher stands in for login, so one person can demo all three roles.
 
+### Users × screens
+
+| Screen | Customer | Restaurant manager | Dispatcher |
+| --- | :---: | :---: | :---: |
+| Browse | ✓ | ✓ | ✓ |
+| Checkout | ✓ | | |
+| Wallet | ✓ | | |
+| Analytics | | ✓ | |
+| Map | | | ✓ |
+| Reviews + menu | ✓ | ✓ | |
+
+The main nav follows this split: the customer screens (Browse, Checkout, Wallet) come first, then a gap, then the staff screens (Analytics, Map, Reviews).
+
 ## Screens
 
 | Screen | Owner | Issue | Page shape | Wireframe |

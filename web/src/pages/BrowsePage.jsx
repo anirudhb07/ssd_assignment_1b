@@ -1,6 +1,6 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { listOrders, listRestaurants, listUsers } from '../api/endpoints.js';
 import {
   Button, DataTable, PageHeader, Pagination, QueryState, SelectField, StatusBadge, Tabs, TextField,
@@ -16,13 +16,21 @@ const TABS = [
 ];
 const PAGE_SIZE = 20;
 
+// Last column of each table: rows already open on click (or Enter); this
+// makes that visible.
+const OPEN = { key: 'open', header: '', numeric: true, render: () => <span className="row-open" aria-hidden="true">View ›</span> };
+
 export function BrowsePage() {
   const { params, update } = useListParams();
   const tab = params.get('tab') ?? 'restaurants';
 
   return (
     <>
-      <PageHeader title="Browse" description="Look up any user, restaurant or order." />
+      <PageHeader
+        title="Browse"
+        description="Look up any user, restaurant or order."
+        actions={<Link className="btn btn--primary" to="/checkout">New order</Link>}
+      />
       {/* Switching tab drops the other tab's page and filters. */}
       <Tabs tabs={TABS} value={tab} onChange={(value) => update({ tab: value, page: null, search: null, status: null, userId: null, restaurantId: null })} />
       {tab === 'restaurants' && <RestaurantsTab />}
@@ -72,12 +80,14 @@ function RestaurantsTab() {
             <DataTable
               columns={[
                 { key: 'name', header: 'Name' },
-                { key: 'latitude', header: 'Latitude', numeric: true, render: (r) => r.latitude.toFixed(4) },
-                { key: 'longitude', header: 'Longitude', numeric: true, render: (r) => r.longitude.toFixed(4) },
+                { key: 'completedOrderCount', header: 'Delivered orders', numeric: true, render: (r) => r.completedOrderCount.toLocaleString('en-IN') },
+                { key: 'completedRevenue', header: 'Revenue', numeric: true, render: (r) => formatMoney(r.completedRevenue) },
+                OPEN,
               ]}
               rows={data.items}
               onRowClick={(r) => navigate(`/browse/restaurants/${r.id}`)}
             />
+            <p className="muted small">Totals count delivered orders, as of the last summary refresh (Analytics → Refresh).</p>
             <Pagination page={data.page} pageSize={data.pageSize} total={data.total} onPageChange={(p) => update({ page: p })} />
           </>
         )}
@@ -112,6 +122,7 @@ function UsersTab() {
               columns={[
                 { key: 'name', header: 'Name' },
                 { key: 'walletBalance', header: 'Wallet balance', numeric: true, render: (u) => formatMoney(u.walletBalance) },
+                OPEN,
               ]}
               rows={data.items}
               onRowClick={(u) => navigate(`/browse/users/${u.id}`)}
@@ -188,6 +199,7 @@ function OrdersTab() {
                 { key: 'restaurantName', header: 'Restaurant' },
                 { key: 'totalAmount', header: 'Amount', numeric: true, render: (o) => formatMoney(o.totalAmount) },
                 { key: 'status', header: 'Status', render: (o) => <StatusBadge status={o.status} /> },
+                OPEN,
               ]}
               rows={data.items}
               onRowClick={(o) => navigate(`/browse/orders/${o.id}`)}

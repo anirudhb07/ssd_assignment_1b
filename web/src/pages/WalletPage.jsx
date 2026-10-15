@@ -120,9 +120,12 @@ function CustomerWallet({ customer, from, to, page, update }) {
   return (
     <>
       <div className="grid-cards">
-        <Card><Stat label="Current balance" value={formatMoney(customer.walletBalance)} /></Card>
-        <Card><Stat label={filtered ? 'Entries in these dates' : 'Entries'} value={entries} /></Card>
-        <Card><Stat label="Last change" value={lastChange} /></Card>
+        <Card><Stat label="Current balance" value={formatMoney(customer.walletBalance)} hint={customer.name} /></Card>
+        <Card>
+          <Stat label={filtered ? 'Entries in these dates' : 'Entries'} value={entries}
+            hint={filtered ? 'Across the chosen dates' : 'Since the wallet was opened'} />
+        </Card>
+        <Card><Stat label="Last change" value={lastChange} hint="All times are India Standard Time" /></Card>
       </div>
 
       {dateProblem ? (
@@ -138,16 +141,28 @@ function CustomerWallet({ customer, from, to, page, update }) {
                 columns={[
                   { key: 'changedAt', header: 'Time', render: (a) => formatDateTime(a.changedAt) },
                   { key: 'actionType', header: 'Type', render: (a) => <StatusBadge status={a.actionType} /> },
-                  { key: 'amountChanged', header: 'Amount', numeric: true, render: (a) => formatMoney(a.amountChanged) },
+                  { key: 'amountChanged', header: 'Amount', numeric: true, render: (a) => <SignedAmount entry={a} /> },
                   { key: 'balanceAfter', header: 'Balance after', numeric: true, render: (a) => formatMoney(a.balanceAfter) },
                 ]}
                 rows={data.items}
               />
+              <p className="muted small">Balance after is the wallet balance straight after that change. Newest first.</p>
               <Pagination page={data.page} pageSize={data.pageSize} total={data.total} onPageChange={(p) => update({ page: p })} />
             </>
           )}
         </QueryState>
       )}
     </>
+  );
+}
+
+// +₹1,000 (credit, green) or −₹743.11 (debit, red), so the direction of each
+// change reads at a glance without looking at the Type column.
+function SignedAmount({ entry }) {
+  const credit = entry.actionType === 'CREDIT';
+  return (
+    <span className={credit ? 'amount--credit' : 'amount--debit'}>
+      {credit ? '+' : '−'}{formatMoney(entry.amountChanged)}
+    </span>
   );
 }

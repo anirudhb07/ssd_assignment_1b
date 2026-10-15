@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as endpoints from '../api/endpoints.js';
@@ -103,8 +104,8 @@ describe('ReviewsPage', () => {
   it('shows the menu as categories, items, prices and add-ons, and marks unavailable items', async () => {
     renderPage('/reviews?restaurantId=r-1');
 
-    expect(await screen.findByText('Starters')).toBeTruthy();
-    expect(screen.getByText('Mains')).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Starters' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Mains' })).toBeTruthy();
     expect(screen.getByText('Paneer Tikka')).toBeTruthy();
     expect(screen.getByText(formatMoney(240))).toBeTruthy();
     expect(screen.getByText(`Extra cheese +${formatMoney(30)}`)).toBeTruthy();
@@ -112,6 +113,28 @@ describe('ReviewsPage', () => {
 
     // Only Veg Spring Roll is unavailable.
     expect(screen.getAllByText('Unavailable').length).toBe(1);
+  });
+
+  it('filters the menu by category and availability, and links to an order', async () => {
+    renderPage('/reviews?restaurantId=r-1');
+    await screen.findByRole('heading', { name: 'Starters' });
+    expect(screen.getByText(/Menu updated/)).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Place an order' }).getAttribute('href')).toBe('/checkout?restaurantId=r-1');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Mains' }));
+    expect(screen.queryByRole('heading', { name: 'Starters' })).toBeNull();
+    expect(screen.getByText('Butter Chicken')).toBeTruthy();
+
+    await userEvent.click(screen.getByRole('button', { name: 'All items' }));
+    await userEvent.click(screen.getByLabelText('Available only'));
+    expect(screen.getByText('Paneer Tikka')).toBeTruthy();
+    expect(screen.queryByText('Veg Spring Roll')).toBeNull();
+  });
+
+  it('names the most mentioned tag', async () => {
+    renderPage('/reviews');
+    expect(await screen.findByText('tasty')).toBeTruthy(); // 14 beats fast_delivery's 11
+    expect(screen.getByText('14 reviews mention it')).toBeTruthy();
   });
 
   it('shows an empty state when there are no reviews', async () => {
