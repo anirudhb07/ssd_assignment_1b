@@ -463,14 +463,12 @@ ssd_assignment_1b/
 
 ## Contribution
 
-Names and roll numbers are in the [Team](#team) table. Before submitting, describe what each member actually did, design and code, so the grader can see the split.
-
-| Member | Contribution |
-| --- | --- |
-| A | |
-| B | |
-| C | |
-| D | |
+| Member | Role | Contributions |
+| --- | --- | --- |
+| Nithin (2026201038) | Checkout (Workflow 1) | Designed the Checkout wireframes. Added the order-status and wallet top-up procedures, built the checkout APIs and the Checkout and order screens, and wrote the Checkout tests and demo checklist. |
+| Anirudh (2026201058) | Browse & Wallet | Designed the shared wireframe kit and the Browse and Wallet wireframes. Set up Docker and the project structure, built the Browse and Wallet APIs and screens, and added the demo customers and performance evidence. |
+| Sanjana (2026204012) | Analytics & Reviews (Workflows 2, 4) | Designed the Analytics and Reviews wireframes. Linked the Mongo data to PostgreSQL, added the revenue trend and ranking SQL, and built the Analytics and Reviews APIs and screens with tests. |
+| Dhavla Ravi (2026204004) | Map (Workflow 3) & release | Designed the Map wireframes. Added the driver ping simulator, fixed the `$geoNear` pipeline and other inherited database issues, and built the nearby-drivers API and the live Map screen with tests. Finalised the handover note and README, and recorded the demo video and prepared the submission. |
 
 ---
 
