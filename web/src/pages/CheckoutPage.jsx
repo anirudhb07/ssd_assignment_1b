@@ -74,11 +74,19 @@ function CheckoutSession({ customer }) {
   </div>;
 }
 
+// The customer chosen in Acting as no longer exists (e.g. after a full
+// reseed): Try again can't help, so point to the switcher instead.
+const missingCustomer = (query) => query.isError && query.error?.status === 404;
+function MissingCustomer() {
+  return <p className="alert alert--error" role="alert">This customer no longer exists. Choose another customer in Acting as.</p>;
+}
+
 // Beside the restaurant list: what the customer has to spend.
 function WalletPanel({ customer }) {
   const user = useQuery({ queryKey: ['user', customer?.id], queryFn: () => getUser(customer.id), enabled: !!customer });
   return <Card title="Your wallet">
     {!customer ? <p className="muted small">No customer chosen.</p>
+      : missingCustomer(user) ? <MissingCustomer />
       : <QueryState query={user} loadingLabel="Loading wallet…">{(data) => <>
         <Stat label="Available balance" value={formatMoney(data.walletBalance)} hint={data.name} />
         {data.activeOrder && <p className="alert alert--info">This customer already has an order in progress, so a new order will be refused until it is delivered.</p>}
@@ -147,6 +155,10 @@ function MenuAndCart({ menu, restaurant, customer, onChangeRestaurant }) {
   // The customer's order in progress, if any (refetched after a failed payment).
   const activeOrder = user.data?.activeOrder ?? null;
   const insufficient = payment.error?.status === 402 && payment.error.code === 'INSUFFICIENT_BALANCE';
+  // The cart costs more than the wallet holds: say so before paying (the
+  // database would refuse it with 402), with Top up right here.
+  const shortBy = user.data && validTotal ? total - Math.round(user.data.walletBalance * 100) : 0;
+  const overBudget = shortBy > 0 && !activeOrder && !payment.error && !payment.isPending;
   // The 409 link appears once the customer is reloaded, so scroll again then.
   useEffect(() => {
     feedback.current?.scrollIntoView?.({ block: 'nearest' });
@@ -200,7 +212,7 @@ function MenuAndCart({ menu, restaurant, customer, onChangeRestaurant }) {
   return <>
     <Button variant="secondary" disabled={busy} onClick={onChangeRestaurant}>Change restaurant</Button>
     <p className="muted small">Changing restaurant clears your cart. Add-ons apply to every unit of that item.</p>
-    {customer && <QueryState query={user}>{(data) => <div className="checkout-stats">
+    {missingCustomer(user) ? <MissingCustomer /> : customer && <QueryState query={user}>{(data) => <div className="checkout-stats">
       <Card><Stat label={`Wallet balance · ${data.name}`} value={formatMoney(data.walletBalance)} /></Card>
       <Card><Stat label="Order total" value={formatMoney(total / 100)} /></Card>
       <Card><Stat label="Estimated balance after" value={formatMoney((Math.round(data.walletBalance * 100) - total) / 100)} hint="The server confirms your balance when you place the order." /></Card>
@@ -247,7 +259,11 @@ function MenuAndCart({ menu, restaurant, customer, onChangeRestaurant }) {
         <Button disabled={!customer || !validTotal || busy || !user.isSuccess} onClick={placeOrder}>{payment.isPending ? 'Placing order…' : 'Place order'}</Button>
         {/* Payment problems and their next step sit right under Place order, so
             they're seen without scrolling past the menu. */}
-        {(payment.error || showTopup || activeOrder) && <div className="stack checkout-feedback" ref={feedback}>
+        {(payment.error || showTopup || activeOrder || overBudget) && <div className="stack checkout-feedback" ref={feedback}>
+          {overBudget && <>
+            <p className="alert alert--info" role="status">This order costs {formatMoney(shortBy / 100)} more than the wallet balance ({formatMoney(user.data.walletBalance)}). Top up first, or the payment will be refused.</p>
+            {!showTopup && <Button variant="secondary" disabled={busy} onClick={() => setShowTopup(true)}>Top up</Button>}
+          </>}
           {/* Say so before paying: the database will refuse a second active
               order (partial unique index), and a top-up wouldn't change that. */}
           {activeOrder && !payment.error && !payment.isPending && <>

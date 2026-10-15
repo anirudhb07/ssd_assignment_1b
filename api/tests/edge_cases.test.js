@@ -47,4 +47,22 @@ describe('edge cases', () => {
     expect(res.body.totalCredits).toBeCloseTo(Number(u.c), 2);
     expect(res.body.totalDebits).toBeCloseTo(Number(u.d), 2);
   });
+  it('refuses to advance an order whose status changed since the page loaded', async () => {
+    const { rows: [o] } = await pool.query("SELECT id, status FROM orders WHERE status = 'PREPARING' LIMIT 1");
+    const res = await request(app).post(`/api/orders/${o.id}/advance`).send({ from: 'DELIVERING' });
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('STALE_ORDER');
+    const { rows: [after] } = await pool.query('SELECT status FROM orders WHERE id = $1', [o.id]);
+    expect(after.status).toBe('PREPARING'); // nothing changed
+  });
+  it('advances normally when the status the page showed is still current', async () => {
+    const { rows: [o] } = await pool.query("SELECT id FROM orders WHERE status = 'PREPARING' LIMIT 1");
+    try {
+      const res = await request(app).post(`/api/orders/${o.id}/advance`).send({ from: 'PREPARING' });
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('DELIVERING');
+    } finally {
+      await pool.query("UPDATE orders SET status = 'PREPARING' WHERE id = $1", [o.id]); // put it back
+    }
+  });
 });

@@ -98,6 +98,7 @@ Order.
 
 ### `POST /orders/:id/advance`
 Moves `PREPARING → DELIVERING → DELIVERED`. Returns the updated Order. `409 INVALID_TRANSITION` if it is already `DELIVERED`.
+Optional body `{ "from": "PREPARING" | "DELIVERING" }`: the status the caller's page shows. If the order has moved on since, the answer is `409 STALE_ORDER` and nothing changes (the screens send it, so an out-of-date page can't skip a step).
 
 ### `POST /checkout`
 Body: `{ "userId", "restaurantId", "amount", "items"?: [ { "name", "price", "quantity", "addOns"?: [ ... ] } ] }`

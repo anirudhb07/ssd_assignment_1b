@@ -338,5 +338,20 @@ describe('Checkout', () => {
     expect(cart().queryByRole('button', { name: 'Top up' })).not.toBeInTheDocument();
     expect(cart().getAllByRole('link', { name: 'View active order' })).toHaveLength(1);
   });
+  it('warns before paying when the cart costs more than the wallet, with Top up right there', async () => {
+    getUser.mockResolvedValue({ id: 'u1', name: 'Customer One', walletBalance: 0.15, activeOrder: null });
+    setup(); await choose(); await add('Toast'); // ₹0.20 against ₹0.15
+    expect(await cart().findByText(/costs ₹0.05 more than the wallet balance/)).toBeInTheDocument();
+    expect(cart().getByRole('button', { name: 'Place order' })).toBeEnabled(); // the database still decides
+    await userEvent.click(cart().getByRole('button', { name: 'Top up' }));
+    expect(cart().getByLabelText('Top-up amount (₹)')).toBeInTheDocument();
+  });
+
+  it('says the chosen customer no longer exists instead of offering Try again', async () => {
+    getUser.mockRejectedValue(new ApiError(404, 'NOT_FOUND', 'That customer was not found.'));
+    setup();
+    expect(await screen.findByText(/This customer no longer exists/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+  });
 });
 

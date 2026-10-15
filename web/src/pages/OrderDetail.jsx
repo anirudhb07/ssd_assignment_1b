@@ -12,7 +12,7 @@ export function OrderDetail({ id }) {
   const submitting = useRef(false);
   const query = useQuery({ queryKey: ['order', id], queryFn: () => getOrder(id) });
   const advance = useMutation({
-    mutationFn: () => advanceOrder(id),
+    mutationFn: () => advanceOrder(id, query.data?.status),
     onSuccess: (order) => client.setQueryData(['order', id], order),
     // Also refresh after errors: another screen may have advanced this order.
     // Await every refresh before enabling the next transition.
