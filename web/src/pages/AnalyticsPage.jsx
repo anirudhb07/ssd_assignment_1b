@@ -69,9 +69,11 @@ export function AnalyticsPage() {
     },
   });
 
-  // What the picker shows: the restaurant the chart is actually for.
-  const selected = revenue.data
-    ? { id: revenue.data.restaurantId, name: revenue.data.restaurantName }
+  // What the picker shows: the restaurant the chart is actually for. After an
+  // error (for example a bad id in the link) there is nothing to show, so the
+  // picker goes back to "Choose a restaurant" instead of sticking on "Loading…".
+  const selected = revenue.isError ? null
+    : revenue.data ? { id: revenue.data.restaurantId, name: revenue.data.restaurantName }
     : restaurantId ? { id: restaurantId, name: 'Loading…' } : null;
 
   return (
@@ -123,7 +125,7 @@ export function AnalyticsPage() {
           )}
         </QueryState>
 
-        <div style={grid(380)}>
+        <div style={{ ...grid(380), alignItems: 'start' }}>
           <Card title={revenue.data ? `Revenue: ${revenue.data.restaurantName}` : 'Revenue'}>
             <QueryState
               query={revenue}
@@ -190,6 +192,7 @@ export function AnalyticsPage() {
                       { key: 'totalRevenue', header: 'Revenue', numeric: true, render: (r) => formatMoney(r.totalRevenue) },
                     ]}
                     rows={data.items}
+                    rowKey="restaurantId"
                     onRowClick={(r) => update({ restaurantId: r.restaurantId })}
                   />
                   <p className="muted small">Click a restaurant to see its trend. Tied revenue shares a rank.</p>
