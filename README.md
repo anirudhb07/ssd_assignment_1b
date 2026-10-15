@@ -54,6 +54,20 @@ There is no login. The **Acting as** switcher in the header picks the role for t
 
 Every screen has loading, empty and error states and works at phone width.
 
+### Screen Previews
+
+Screenshots captured against the live seeded databases at laptop (1280×800) and phone (390×844) resolutions. To retake them at any time, run `bash scripts/capture_screenshots.sh`.
+
+| Screen | Laptop Preview (1280×800) | Phone Preview (390×844) |
+| --- | :---: | :---: |
+| **Home** | [![Home Laptop](docs/design/screenshots/home_laptop.png)](docs/design/screenshots/home_laptop.png) | [![Home Phone](docs/design/screenshots/home_phone.png)](docs/design/screenshots/home_phone.png) |
+| **Browse** | [![Browse Laptop](docs/design/screenshots/browse_laptop.png)](docs/design/screenshots/browse_laptop.png) | [![Browse Phone](docs/design/screenshots/browse_phone.png)](docs/design/screenshots/browse_phone.png) |
+| **Checkout** | [![Checkout Laptop](docs/design/screenshots/checkout_laptop.png)](docs/design/screenshots/checkout_laptop.png) | [![Checkout Phone](docs/design/screenshots/checkout_phone.png)](docs/design/screenshots/checkout_phone.png) |
+| **Wallet** | [![Wallet Laptop](docs/design/screenshots/wallet_laptop.png)](docs/design/screenshots/wallet_laptop.png) | [![Wallet Phone](docs/design/screenshots/wallet_phone.png)](docs/design/screenshots/wallet_phone.png) |
+| **Analytics** | [![Analytics Laptop](docs/design/screenshots/analytics_laptop.png)](docs/design/screenshots/analytics_laptop.png) | [![Analytics Phone](docs/design/screenshots/analytics_phone.png)](docs/design/screenshots/analytics_phone.png) |
+| **Map** | [![Map Laptop](docs/design/screenshots/map_laptop.png)](docs/design/screenshots/map_laptop.png) | [![Map Phone](docs/design/screenshots/map_phone.png)](docs/design/screenshots/map_phone.png) |
+| **Reviews** | [![Reviews Laptop](docs/design/screenshots/reviews_laptop.png)](docs/design/screenshots/reviews_laptop.png) | [![Reviews Phone](docs/design/screenshots/reviews_phone.png)](docs/design/screenshots/reviews_phone.png) |
+
 ## Demo path
 
 A walk through all four workflows on the seeded data, in about five minutes. Start the app with `docker compose up -d` and check that `ping-simulator` is running (`docker compose ps`), or the map has no drivers.
@@ -460,6 +474,10 @@ ssd_assignment_1b/
 | PostgreSQL query plans recaptured (issue #67) | `performance/postgres_explain_analyzes.txt`, `performance/capture_postgres_plans.sql` | The inherited file held one plan, the Workflow 2 report doing a full scan of `orders`, and nothing for the queries the app runs. The script runs `EXPLAIN (ANALYZE, BUFFERS)` on the API's own SQL for each screen, with real ids, and every read of the large tables (orders, wallet history, the summary view by restaurant) uses an index; the only full scans are of two 500-row tables (restaurants in a join, and the summary view for the ranking) and the inherited all-restaurants report (see [Performance](#performance)). To recapture (same in bash and PowerShell): `docker compose cp performance/capture_postgres_plans.sql postgres:/tmp/capture_postgres_plans.sql`, then `docker compose exec -T postgres sh -c "psql -X -q -U postgres -d bitestream -f /tmp/capture_postgres_plans.sql > /tmp/postgres_explain_analyzes.txt"`, then `docker compose cp postgres:/tmp/postgres_explain_analyzes.txt performance/postgres_explain_analyzes.txt` |
 | Demo customers with fixed ids (issue #66) | `sql/fixtures/demo_customers.sql`, `docker/seed/seed.sh`, `api/tests/demo_customers.test.js` | Most seeded customers already have an order in progress and every id changes on reseed, so the checkout outcomes were hard to show on demand. Three customers ("Demo - plenty of money", "Demo - low balance", "Demo - order in progress") are created with the real procedures, so their orders and wallet history are like any other's. `seed.sh` applies the file after seeding, on every run, which also puts them back into their demo state; `CALL sp_reset_demo_customers();` does the same by hand. |
 | Realistic restaurant names | `data_generation/restaurant_names.py`, `data_generation/postgres_seeder.py`, `docker/seed/seed.sh`, `sql/fixtures/demo_customers.sql` | The seeder named restaurants `Restaurant-1` … `Restaurant-500`, which made screens, charts and the demo hard to follow. Each restaurant now gets an invented Bengaluru-style name such as "Kaveri Dosa Corner" (25 first words × 20 kinds of place, 500 unique names), assigned in restaurant-id order so every machine has the same names. `seed.sh` runs the script on every seed: it renames restaurants in an existing database, updates the Mongo menus' `restaurantName` to match and refreshes the summary view (which stores names); when the names are already right it changes nothing. After pulling, run `docker compose run --rm seed`; no reset needed. The demo customers now use the alphabetically first restaurant ("Ananda Bakery"). |
+| Driver ping simulator and capped seed ping age (issue #7) | `data_generation/ping_simulator.py`, `docker-compose.yml`, `data_generation/mongo_seeder.py` | Seeded pings expired after 2 hours against MongoDB's TTL index. The simulator runs as a background service generating fresh coordinates for ~200 drivers near restaurants every 4s, and seeded ping age was capped to 1h, keeping the map alive indefinitely. |
+| Rewritten `$geoNear` aggregation pipeline and nearby drivers route (issue #8, issue #16) | `mongo/02_workflow3_geonear.js`, `api/src/routes/drivers.js`, `api/tests/drivers.test.js` | The inherited pipeline stopped at `$limit: 1` and filtered active before grouping, causing stale positions. The new pipeline filters active pings in the last 10 minutes, groups by `driverId` to pick each driver's single newest ping, and matches `$geoNear` with `active: true` within 5 km, returning deduplicated drivers sorted by distance. |
+| Idempotent seeders (issue #11) | `data_generation/postgres_seeder.py`, `data_generation/mongo_seeder.py` | Both seeders check for existing records before running, preventing duplicate rows or documents on restarts. |
+| Missing `idx_reviews_rating` index (issue #11) | `mongo/01_collections_and_indexes.js` | Created missing index on `{ rating: 1 }` in Reviews collection referenced by `performance/mongo_execution_stats.json`. |
 
 ## Contribution
 
