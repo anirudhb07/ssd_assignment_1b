@@ -30,6 +30,11 @@ else
     echo "==> PostgreSQL already has ${users} users, skipping seed"
 fi
 
+# After seeding (it needs the restaurants), on every run: the three demo
+# customers with fixed ids, put back into their demo state (issue #66).
+echo "==> Applying sql/fixtures/demo_customers.sql"
+PGOPTIONS="-c client_min_messages=warning" psql -v ON_ERROR_STOP=1 -q -f /work/sql/fixtures/demo_customers.sql
+
 echo "==> Applying mongo/01_collections_and_indexes.js"
 mongosh --quiet "${MONGO_DB_URI}" /work/mongo/01_collections_and_indexes.js
 

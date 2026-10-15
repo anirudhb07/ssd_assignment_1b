@@ -73,6 +73,32 @@ services:
     command: ["bash", "/work/seed.sh"]
     restart: "no"
 
+  # Background driver ping simulator for Workflow 3 (Issue #7).
+  # Writes live driver coordinates every few seconds so pings never expire.
+  ping-simulator:
+    build:
+      context: .
+      dockerfile: docker/seed/Dockerfile
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: bitestream
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      MONGO_URI: mongodb://mongo:27017
+      MONGO_DB: bitestream
+    volumes:
+      - ./data_generation:/work/data_generation:ro
+    command: ["python3", "-u", "/work/data_generation/ping_simulator.py"]
+    restart: unless-stopped
+
   # Express API with auto-restart on file changes. Your ./api folder is
   # mounted in; node_modules lives in a Docker volume so it never clashes
   # with a node_modules you may have installed on your own machine.

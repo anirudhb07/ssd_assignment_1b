@@ -69,6 +69,7 @@ describe('fn_wallet_audit', () => {
     const rows = await inRollback(async (c) => {
       const { rows: [u] } = await c.query('SELECT id FROM users WHERE wallet_balance > 100 LIMIT 1');
       await c.query('UPDATE users SET wallet_balance = wallet_balance - 10 WHERE id = $1', [u.id]);
+      await new Promise((r) => setTimeout(r, 10));
       await c.query('UPDATE users SET wallet_balance = wallet_balance + 25 WHERE id = $1', [u.id]);
       return (await c.query(
         'SELECT seq, action_type, changed_at FROM wallet_audit_logs WHERE user_id = $1 ORDER BY seq DESC LIMIT 2',
