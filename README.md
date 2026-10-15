@@ -345,7 +345,9 @@ ssd_assignment_1b/
 4. Orders move only forward: Preparing → Delivering → Delivered. There is no cancellation, because the inherited schema has no such status.
 5. Seeded wallets start at ₹0 and get one opening CREDIT (their starting balance) 30 days ago, before any order, so each customer's audit trail explains their whole balance.
 6. Dates in filters (the Wallet screen's from/to) are Indian calendar days (`Asia/Kolkata`). The database stores UTC; the app shows times in the browser's time zone.
-7. _Add more as you make decisions._
+7. The 7-day moving average covers the days that have delivered orders in the window; days with no orders are not counted as zeros.
+8. Each review belongs to one delivered order (one review per order). Restaurants with no delivered orders are left out of the revenue ranking.
+9. _Add more as you make decisions._
 
 ## Changes to the Inherited Code
 
@@ -358,6 +360,8 @@ ssd_assignment_1b/
 | Seed runs every numbered SQL file (except `06`) | `docker/seed/seed.sh` | So new scripts (`sql/07`–`10`) are applied without editing the seed. |
 | Index `idx_orders_created_at` on `orders(created_at DESC, id DESC)` | `sql/08_orders_recent_index.sql` | Browse lists orders newest first. Without it every page scanned and sorted all 120,000 orders (128 ms); with it, 1.5 ms. |
 | Wallet audit rows can be ordered: `seq` column, trigger uses `clock_timestamp()`, seeder dates each row with its order's time | `sql/08_audit_ordering.sql`, `data_generation/postgres_seeder.py` | The trigger used `NOW()` (transaction start) and the seeder ran in one transaction, so all 120,000 audit rows shared one timestamp: no date filter or running balance was possible. Now rows span 30 days and every customer's balances chain by `seq`. `seq` orders rows but can have gaps (rolled-back changes use numbers). After pulling, reseed with `RESET=1`. |
+| Per-restaurant revenue trend (`RANGE` over 6 days), revenue ranking function, refresh log, logging refresh procedure (issue #10) | `sql/09_restaurant_window_and_refresh_log.sql` | The inherited moving average used `ROWS 6 PRECEDING`, which is six rows rather than six days when a restaurant has days with no orders. The trend is now a per-restaurant function, `fn_restaurant_revenue_trend`, using `RANGE INTERVAL '6 days'`, and `fn_restaurant_revenue_ranking()` serves the Analytics screen. `sp_refresh_restaurant_summary()` also writes a row to `restaurant_summary_refresh_log` so the screen can show when the summary was last refreshed. Apply with `docker compose run --rm seed`; no reset needed. |
+| Mongo menus and reviews linked to Postgres (issue #5) | `data_generation/mongo_seeder.py` | The seeder invented random restaurant IDs, so none of the 500 menus or 10,000 reviews belonged to a real restaurant, and reviews pointed to orders that did not exist. It now reads restaurants and `DELIVERED` orders from Postgres: one menu per restaurant, and one review per delivered order with that order's user and restaurant. After pulling, clear the Mongo collections (`deleteMany`) and run the seed again. |
 | _Whoever makes a fix: add it here_ | | |
 
 ## Contribution
