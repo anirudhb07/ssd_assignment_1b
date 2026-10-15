@@ -42,15 +42,15 @@ The mapping from PostgreSQL errors lives in `api/src/lib/errors.js`.
 | `POST /users/:id/topup` | REAL | `sp_wallet_topup` | Checkout |
 | `GET /restaurants` | REAL | `restaurants` | Browse, actor switcher |
 | `GET /restaurants/:id` | REAL | `restaurants`, `restaurant_order_summary` | Browse detail |
-| `GET /restaurants/:id/menu` | MOCK | Mongo `Menus` | Checkout, Reviews |
+| `GET /restaurants/:id/menu` | REAL | Mongo `Menus` | Checkout, Reviews |
 | `GET /orders` | REAL | `orders` | Browse |
 | `GET /orders/:id` | REAL | `orders` | Browse detail |
 | `POST /orders/:id/advance` | REAL | `sp_advance_order_status` | Browse detail |
 | `POST /checkout` | REAL | `sp_execute_checkout` | Checkout |
-| `GET /analytics/revenue` | MOCK | Window query, `sql/06` | Analytics |
-| `GET /analytics/ranking` | MOCK | Window query, `DENSE_RANK()` | Analytics |
-| `GET /analytics/summary` | MOCK | `restaurant_order_summary` + refresh log | Analytics |
-| `POST /analytics/summary/refresh` | MOCK | `sp_refresh_restaurant_summary` | Analytics |
+| `GET /analytics/revenue` | REAL | Window query, `sql/06` | Analytics |
+| `GET /analytics/ranking` | REAL | Window query, `DENSE_RANK()` | Analytics |
+| `GET /analytics/summary` | REAL | `restaurant_order_summary` + refresh log | Analytics |
+| `POST /analytics/summary/refresh` | REAL | `sp_refresh_restaurant_summary` | Analytics |
 | `GET /drivers/nearby` | REAL | Mongo `$geoNear`, `mongo/02` | Map |
 | `GET /reviews/stats` | REAL | Mongo `$facet`, `mongo/03` | Reviews |
 
