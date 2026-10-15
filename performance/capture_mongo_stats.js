@@ -2,22 +2,25 @@
 // one JSON document (issue #57). The pipelines are the same as in
 // mongo/02_workflow3_geonear.js and mongo/03_workflow4_facet.js; keep them in
 // step if those change. Run it with the ping simulator on, so there are live
-// pings, and save the output:
+// pings. These three commands work the same in bash and PowerShell (the file is
+// written inside the container, so no shell quoting or encoding gets in the way):
 //
-//   docker compose exec -T mongo mongosh --quiet bitestream \
-//     --eval "$(cat performance/capture_mongo_stats.js)" > performance/mongo_execution_stats.json
-//
-// (--eval rather than piping the file in: piped input echoes a prompt per line.)
+//   docker compose cp performance/capture_mongo_stats.js mongo:/tmp/capture_mongo_stats.js
+//   docker compose exec -T mongo sh -c "mongosh --quiet bitestream --file /tmp/capture_mongo_stats.js > /tmp/mongo_execution_stats.json"
+//   docker compose cp mongo:/tmp/mongo_execution_stats.json performance/mongo_execution_stats.json
 
 // Same origin as mongo/02 (GeoJSON is [longitude, latitude]).
 const origin = { type: "Point", coordinates: [77.5946, 12.9716] };
 const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
 
-// Short summary of an explain: what a reader checks first.
+// Short summary of an explain: what a reader checks first. returnedByScan is
+// MongoDB's nReturned for the scan stage (index or collection): the documents
+// it passed on to the rest of the pipeline, not the pipeline's final output
+// (e.g. 29,800 recent pings in, about 200 drivers out after $group).
 function summarise(explain) {
     const indexes = new Set();
     const stages = new Set();
-    let docs = 0, keys = 0, ms = 0, returned = null;
+    let docs = 0, keys = 0, ms = 0, returnedByScan = null;
     (function walk(node) {
         if (Array.isArray(node)) return node.forEach(walk);
         if (!node || typeof node !== "object") return;
@@ -28,12 +31,12 @@ function summarise(explain) {
             docs += s.totalDocsExamined || 0;
             keys += s.totalKeysExamined || 0;
             ms = Math.max(ms, s.executionTimeMillis || 0);
-            if (returned === null) returned = s.nReturned;
+            if (returnedByScan === null) returnedByScan = s.nReturned;
         }
         Object.values(node).forEach(walk);
     })(explain);
     return {
-        nReturned: returned,
+        returnedByScan,
         totalDocsExamined: docs,
         totalKeysExamined: keys,
         executionTimeMillis: ms,

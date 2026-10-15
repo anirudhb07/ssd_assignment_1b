@@ -14,7 +14,7 @@
     ],
     "latestPingPerDriver": {
       "summary": {
-        "nReturned": 29800,
+        "returnedByScan": 29800,
         "totalDocsExamined": 29800,
         "totalKeysExamined": 29800,
         "executionTimeMillis": 82,
@@ -263,7 +263,7 @@
     },
     "driversWithin5km": {
       "summary": {
-        "nReturned": 13,
+        "returnedByScan": 13,
         "totalDocsExamined": 184326,
         "totalKeysExamined": 106411,
         "executionTimeMillis": 825,
@@ -28774,7 +28774,7 @@
     "script": "mongo/03_workflow4_facet.js",
     "allReviews": {
       "summary": {
-        "nReturned": 10000,
+        "returnedByScan": 10000,
         "totalDocsExamined": 10000,
         "totalKeysExamined": 0,
         "executionTimeMillis": 38,
@@ -29291,7 +29291,7 @@
     "oneRestaurant": {
       "restaurantId": "e9ebbeca-50c6-4afd-a27a-f390a4a6c29c",
       "summary": {
-        "nReturned": 33,
+        "returnedByScan": 33,
         "totalDocsExamined": 33,
         "totalKeysExamined": 33,
         "executionTimeMillis": 1,
