@@ -3,6 +3,7 @@
 export { Button } from './Button.jsx';
 export { Card, Stat } from './Card.jsx';
 export { DataTable } from './DataTable.jsx';
+export { DetailList } from './DetailList.jsx';
 export { Field, SelectField, TextField } from './Field.jsx';
 export { PageHeader } from './PageHeader.jsx';
 export { Pagination } from './Pagination.jsx';

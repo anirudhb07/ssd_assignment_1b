@@ -180,8 +180,17 @@ def create_driver_ping(driver_id):
     longitude = 77.5946 + random.uniform(-0.08, 0.08)
 
     created_at = (
-        datetime.now(timezone.utc)
-        - timedelta(seconds=random.randint(0, 3 * 60 * 60))
+
+        datetime.now(
+            timezone.utc
+        )
+
+        - timedelta(
+            seconds=random.randint(
+                0,
+                1 * 60 * 60
+            )
+        )
     )
 
     return {
