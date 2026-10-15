@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { Outlet, Route, Routes } from 'react-router';
+import { ErrorBoundary } from './components/ErrorBoundary.jsx';
 import { Layout } from './components/Layout.jsx';
 import { Loading } from './components/ui/index.js';
 import { HomePage } from './pages/HomePage.jsx';
@@ -20,7 +21,7 @@ export function App() {
   return (
     <Routes>
       <Route element={<Layout />}>
-        <Route element={<Suspense fallback={<Loading />}><Outlet /></Suspense>}>
+        <Route element={<ErrorBoundary><Suspense fallback={<Loading />}><Outlet /></Suspense></ErrorBoundary>}>
           <Route index element={<HomePage />} />
           <Route path="browse" element={<BrowsePage />} />
           <Route path="browse/:entity/:id" element={<DetailPage />} />

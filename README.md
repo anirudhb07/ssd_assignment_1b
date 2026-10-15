@@ -74,12 +74,13 @@ Using them changes them. To put all three back, run `docker compose run --rm see
 4. **Second order blocked (partial unique index):** switch to **Demo - order in progress** and place any order. It is refused with "This customer already has an order in progress…" and a **View active order** link.
 5. **Advance the order:** follow **View active order** and press **Advance status** twice (Delivering, then Delivered). Back on **Checkout**, the same customer can now order.
 6. **Not enough money:** switch to **Demo - low balance** (₹45) and add any item. Checkout explains the shortfall and offers **Top up**; top up, then **Place order** succeeds.
-7. **Wallet (audit trail):** open **Wallet**. It shows the customer you are acting as, newest first: the top-up and the debit from step 6, each with the balance after it. Use its customer picker to see the others, and set **From** and **To** to narrow it to today.
+7. **Wallet (audit trail):** open **Wallet**. It shows the customer you are acting as, newest first: the top-up (+, green) and the debit (−, red) from step 6, each with the balance after it. Use its customer picker to see the others, and set **From** and **To** to narrow it to today.
 8. **Analytics (Workflow 2):** open **Analytics**, press **Refresh** and watch "last refreshed" change; click a restaurant in the ranking to switch the chart.
-9. **Map (Workflow 3):** open **Map** and choose a restaurant. Drivers within 5 km appear on the map and in the list, nearest first; wait a few seconds and their positions and times update.
-10. **Reviews (Workflow 4):** open **Reviews** for the rating chart, top tags, the average rating and the menu.
+9. **Map (Workflow 3):** open **Map** and choose a restaurant. Drivers within 5 km appear on the map and in the list, nearest first, with matching numbers; wait a few seconds and their positions and times update. Click anywhere on the map (or type a latitude and longitude) to search around that point instead.
+10. **Reviews (Workflow 4):** open **Reviews** for the rating chart, top tags, the average rating and the menu (filter it by category or to available items). **Place an order** opens Checkout on that restaurant's menu.
+11. **When the API is down:** run `docker compose stop api`. Every screen says "Cannot reach the API. Check that it is running." with **Try again**, instead of a blank page or an endless spinner. Run `docker compose start api` and press **Try again**.
 
-Shortcut: on a restaurant's page (**Browse → Restaurants →** a restaurant), **Menu & reviews** and **Analytics** open those screens for that restaurant.
+Shortcut: on a restaurant's page (**Browse → Restaurants →** a restaurant), **Place an order**, **Menu & reviews** and **Analytics** open those screens for that restaurant.
 
 ## What the tests prove
 
