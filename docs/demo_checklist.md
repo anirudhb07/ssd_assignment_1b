@@ -1,123 +1,76 @@
 # BiteStream: four-workflow demo checklist (#26)
 
-Run from the repository root. This is an execution checklist, not a claim that
-every feature is finished. Baseline inspected: `a8f8700` (Order Detail #45 merged).
-Use **PASS / FAILED / BLOCKED / NOT RUN** for execution results and attach observed
-HTTP status, response, SQL output or screenshot. `X-Mock: true` is **MOCKED**,
-never evidence of a database-backed workflow. Dated results are at the end.
+Run from the repository root on the integrated demo branch. Checkout, Analytics,
+Map, Reviews and menus use real APIs and databases. Record PASS / FAILED / NOT RUN
+for each step and retain HTTP responses, SQL output or screenshots. An `X-Mock`
+header is a failed integration check. Results belong in [demo_results.md](demo_results.md),
+not in a second, contradictory checklist.
 
-## 1. Scope, dependencies and coverage matrix
+## 1. Scope and coverage
 
-| Workflow | Current implementation | Database objects / endpoints |
+| Workflow | Screen and API | Database evidence |
 | --- | --- | --- |
-| 1 Checkout | Real Checkout, Wallet, Customer and Order Detail; menu still mocked | `POST /api/checkout`, `POST /api/users/:id/topup`, `GET /api/users/:id/audit`, `GET /api/orders/:id`, `POST /api/orders/:id/advance`; `sp_execute_checkout`, `sp_wallet_topup`, `sp_advance_order_status`, `fn_wallet_audit`, `wallet_audit_logs` |
-| 2 Analytics | `AnalyticsPage.jsx` placeholder; all four analytics routes mocked | `GET /api/analytics/revenue?restaurantId=`, `/ranking`, `/summary`, `POST /summary/refresh`; `restaurant_order_summary`, `sp_refresh_restaurant_summary`, SQL 06 window query |
-| 3 Map | `MapPage.jsx` placeholder; nearby API mocked | `GET /api/drivers/nearby?lat=&lng=&radius=`; `DriverPings`, `idx_driver_location_2dsphere`, `idx_driver_createdAt_ttl`, Mongo 02 `$geoNear` |
-| 4 Reviews/menu | `ReviewsPage.jsx` placeholder; reviews statistics real; menu mocked | `GET /api/reviews/stats?restaurantId=`, `GET /api/restaurants/:id/menu`; `Reviews`, `Menus`, `$facet`, `$unwind` |
+| Checkout | Checkout, Wallet and Order Detail; checkout/top-up/advance routes | Orders, wallet audit trigger, partial unique active-order index |
+| Analytics | Revenue trend, ranking, summary and Refresh | SQL 09 revenue functions, materialized view and refresh log |
+| Map | Restaurant origin, nearby drivers and automatic polling | Latest fresh active pings, `$geoNear`, geospatial and TTL indexes |
+| Reviews/menu | Ratings, sentiment tags and restaurant menu | Mongo Reviews aggregations and Menus linked to PostgreSQL restaurant IDs |
 
-Restaurant/customer details from #39, Wallet #40, Checkout #41 and Order Detail
-#45 are present. Remaining dependencies are Member C's analytics/reviews UI and
-real analytics/menu routes, Member D's map UI/real nearby route, and the seed ID
-linkage fix tracked by #5 (PostgreSQL restaurants must match Mongo restaurant IDs).
-Do not change those implementations to make this demo appear to pass.
+Checkout component tests mock API helpers to cover 201, 402, 409, recovery,
+add-ons, integer-paise totals, pending controls, returned audit data, cache
+invalidation and navigation. Database correctness is checked separately by API
+tests and `api/scripts/demo-check.mjs`. The runner does not replace browser checks.
 
-**Later dependency audit:** local `main` is now `549a361`, which includes merged
-Map PR #44. The tested #26 branch remains at `a8f8700`; no automatic merge was
-performed. Map's simulator, real route and UI exist on main and are
-**IMPLEMENTED, UNVERIFIED** by this run, rather than unfinished team work. See the
-matrix and source-access limitations in [demo_results.md](demo_results.md).
+## 2. Safe fresh seed and live simulator
 
-### Checkout Testing Library coverage
-
-All tests below mock API functions from `web/src/api/endpoints.js`, not production
-code. Existing suites were retained; assertions were strengthened and recovery
-cases were added. API mocks cannot prove a database wasn't debited: use section 4.
-
-| Required behavior | Existing test / verification | #26 work |
-| --- | --- | --- |
-| Acting as customer; missing customer; switching actor | `requires an Acting as customer`; `does not show the previous customer’s late payment result after switching actors`; test setup uses the real ActorProvider | Retained |
-| Restaurant choice, menu, add-ons, total | `loads real restaurant choices...`; `loads the selected menu...`; `adds/removes items...` | Added checkout payload assertion for ₹280 including Extra Cheese |
-| Integer paise / `0.1 + 0.2` | `sends 0.3 for 0.1 + 0.2...`; all 19 `lib/checkout.test.js` cases | Retained |
-| Returned ID, before/after balance, DEBIT, PREPARING | `sends 0.3...` | Added explicit Preparing assertion |
-| Pending, duplicates, cache invalidation, View order | `blocks duplicate submissions...`; `sends 0.3...` opens real DetailPage | Retained |
-| 402 message, top-up action and validation | `handles the former >5000 mock scenario...`; helper validation tests | Retained |
-| Top-up balance, stale error removed, cart retained | Same 402 case | Added balance and preserved Meal/subtotal assertions; existing stale-error assertion retained |
-| No automatic retry; manual retry; user/audit invalidation | Same 402 case | Retained |
-| 409 real active ID and message, no false success/debit | `handles the former active-order simulation...` opens real DetailPage | Added absent confirmation, DEBIT and View order assertions; retry button enabled |
-| Recoverable 409 | `recovers from an active-order conflict by manually retrying the preserved cart` | New test; same payload, explicit retry, old error/link removed |
-| Active order absent / customer lookup fails | `keeps the conflict recoverable...`; `shows a customer lookup error...` | New cases; no fabricated link, proper retry/disabled state |
-| Quantity, unavailable items, customer switching, top-up failures | Remaining Checkout and helper tests | Retained |
-| Order progression, refetch lock, late response, stale conflict | 12 `OrderDetail.test.jsx` tests | Unchanged |
-
-## 2. Safe fresh seed (required)
-
-Prerequisites: Docker Engine/Desktop running, Compose v2, free ports 25432,
-47017, 14000 and 15173. No local PostgreSQL, MongoDB or Node installation required.
-`docs/demo.env` supplies full default seed sizes and alternate ports, not secrets.
-
-Use a **new project name** for each disposable run. The name below was used for
-this run; on another machine use a new name if it already exists. Define `dc`
-once in your shell, then all following `dc` commands are identical on both OSes.
+Docker Engine/Desktop and Compose v2 are required. No host database installation
+is needed. `docs/demo.env` uses alternate ports 25432, 47017, 14000 and 15173.
+Choose a new disposable project name if the example below already contains data.
 
 PowerShell:
 
 ```powershell
-function dc { docker compose --env-file docs/demo.env -p bitestream-issue26-20261015 @args }
+function dc { docker compose --env-file docs/demo.env -p bitestream-issue48-review @args }
 ```
 
 Bash/zsh (macOS, Linux, WSL):
 
 ```bash
-dc() { docker compose --env-file docs/demo.env -p bitestream-issue26-20261015 "$@"; }
+dc() { docker compose --env-file docs/demo.env -p bitestream-issue48-review "$@"; }
 ```
 
-- [ ] **Safety gate — result: ____** Run `git status`, `git branch --show-current`,
-  `git log -8 --oneline`, `docker compose ps`, `docker compose config`, `dc ps -a`,
-  `dc config`, and `docker volume ls --filter label=com.docker.compose.project=bitestream-issue26-20261015`.
-  Expected: new demo project has no old containers/volumes; resolved published ports
-  match `demo.env`; volumes/network carry the demo prefix. Shell environment values
-  override env files: resolve any mismatch before proceeding. Never run the reset
-  against the ordinary `bitestream` project. If existing demo volumes contain
-  valuable/unknown data, choose a new name or get their owner's confirmation.
-- [ ] **Reset scope — result: ____** Read `docker/seed/seed.sh`. `RESET=1` drops
-  the PostgreSQL `public` schema and MongoDB `bitestream` database **inside this
-  project's containers**. Numbered SQL is applied (06 excluded), then collections,
-  indexes and seeders. Both database services use independent project volumes.
-- [ ] **Execute seed — result: ____** Run these commands one at a time; stop on
-  any nonzero exit code. Keep the terminal output as evidence.
+- [ ] Record `git status`, branch and `git rev-parse HEAD`.
+- [ ] Inspect `dc config`, `dc ps -a` and
+  `docker volume ls --filter label=com.docker.compose.project=bitestream-issue48-review`.
+  Confirm project-specific volumes and alternate ports; shell environment variables
+  can override `demo.env`. Do not reset the ordinary `bitestream` project.
+- [ ] Read `docker/seed/seed.sh`: `RESET=1` drops the databases inside the selected
+  project's containers. Run the following sequentially, stopping on errors:
 
 ```text
 dc up -d postgres mongo
 dc run --rm -e RESET=1 seed
-dc up -d --no-deps api web
-dc logs --tail 30 api web
+dc up -d --no-deps api web ping-simulator
+dc logs --tail 30 api web ping-simulator
 dc ps -a
 ```
 
-Expected seed ending: `==> Done. PostgreSQL and MongoDB are ready.` Defaults:
-10,000 users, 500 restaurants, 120,000 orders, 130,000 audits, 500 menus and
-10,000 reviews. 500,000 pings are generated, but their ages span three hours;
-TTL deletion means retained ping counts can already be lower at seed completion.
-`--no-deps` avoids reapplying setup after the one-shot seed. Wait for API and Vite
-ready messages. Open <http://localhost:15173>; API is <http://localhost:14000/api>.
+The seed applies SQL (including SQL 09 and the #66 demo-customer fixtures), Mongo
+indexes, and the linked restaurant/menu/review datasets. `--no-deps` avoids running
+seed again. Keep ping-simulator running for fresh Map results.
 
-- [ ] **Health/counts — result: ____** Home must report both databases connected.
-  Execute:
+- [ ] Open http://localhost:15173. Health at http://localhost:14000/api/health
+  must confirm PostgreSQL and MongoDB connectivity.
+- [ ] Record actual counts; fixtures add demo records and the simulator adds pings:
 
 ```text
 dc exec -T postgres psql -X -U postgres -d bitestream -c "SELECT (SELECT count(*) FROM users) users,(SELECT count(*) FROM restaurants) restaurants,(SELECT count(*) FROM orders) orders,(SELECT count(*) FROM wallet_audit_logs) audits;"
 dc exec -T mongo mongosh bitestream --quiet --eval "printjson({menus:db.Menus.countDocuments(),reviews:db.Reviews.countDocuments(),pings:db.DriverPings.countDocuments()})"
 ```
 
-Use browser Network or open `/api/health` on port 14000: HTTP 200 with
-`{"status":"ok","postgres":true,"mongo":true}`. A connection error is a failure,
-not an empty-data state.
+## 3. Automated verification
 
-## 3. Automated checks
-
-Run these sequentially, before manual writes. API tests use real DB connections;
-Checkout uses an outer transaction and savepoints, audit mutation tests roll back,
-and Browse/API tests read seeded records. No test drops or reseeds a database.
+Run before the manual demo and record actual totals instead of copying historical
+counts. All database tests and the runner must target the disposable project.
 
 ```text
 dc exec -T web npm test -- src/pages/CheckoutPage.test.jsx
@@ -128,435 +81,163 @@ dc exec -T -e DEMO_DISPOSABLE=1 api node scripts/demo-check.mjs
 git diff --check
 ```
 
-- [ ] **Checkout RTL — result: ____**, passed/total: ____.
-- [ ] **Full frontend — result: ____**, passed/total: ____.
-- [ ] **Build — result: ____**, exit code: ____.
-- [ ] **API integration — result: ____**, passed/total: ____.
-- [ ] **HTTP/DB demo runner — result: ____**, attach JSON output. This script
-  uses the real local API, independently checks persisted rows, leaves real orders
-  and wallet activity for inspection, refreshes the materialized view, and stops
-  on assertion failure. It does **not** perform browser checks or mark mocked
-  workflows PASS. Each rerun selects new eligible seed customers; reset for a
-  pristine comparison. `DEMO_DISPOSABLE=1` is an acknowledgement, not automatic
-  isolation: verify section 2 first.
-- [ ] **Whitespace — result: ____** `git diff --check` exits 0.
+On resource-constrained machines, `npm test -- --maxWorkers=2` limits frontend
+parallelism without changing assertions. Retain the runner's JSON: checkout,
+concurrency, top-up, analytics, reviews/menu and Map must report PASS, with no mock
+headers. Assertions stop execution on failures. An empty driver list can be a valid
+query result; the live movement demonstration still requires fresh simulator pings.
 
-## 4. Workflow 1: Checkout, wallet and Order Detail
-
-Use an eligible seeded customer; never assume their balance from a previous run.
-The API runner prints selected IDs and snapshots. For a separate manual UI run,
-select candidates with this SQL and record their names/IDs/balances:
+The runner creates real orders/audits and refreshes the summary. It chooses eligible
+seed customers each time. Before the browser scenarios, reset only the three demo
+customers in this disposable database:
 
 ```text
-dc exec -T postgres psql -X -U postgres -d bitestream -c "SELECT u.id,u.name,u.wallet_balance FROM users u WHERE NOT EXISTS (SELECT 1 FROM orders WHERE user_id=u.id AND status IN ('PREPARING','DELIVERING')) ORDER BY wallet_balance LIMIT 5;"
+dc exec -T postgres psql -X -U postgres -d bitestream -v ON_ERROR_STOP=1 -c "CALL sp_reset_demo_customers();"
 ```
 
-For a funded customer, add `AND wallet_balance >= 2160` before `ORDER BY` in the
-above query. In the header select Customer, search the printed name, and select
-the exact customer option. In Checkout select a restaurant. Record its actual menu
-response and `X-Mock` header. Menu is currently MOCKED; financial endpoints are REAL.
+## 4. Checkout, wallet and Order Detail
 
-### 4.1 Success
+Use the named customers from #66. Explicitly select the intended actor in the
+header; do not assume typing a search selects the payer.
 
-- [ ] **Cart — result: ____** Add an available item, increase/decrease quantity,
-  select an add-on. Independently calculate total in integer paise. In the current
-  mock menu, two Paneer Tikka with Extra Cheese and one Butter Chicken with Extra
-  Spicy + Extra Naan total `2*(240+40)+(400+10+50)=1020`; use the displayed prices
-  if the menu changes. Unavailable Veg Spring Roll cannot be added.
-- [ ] **Payment — result: ____** Record wallet balance and SQL snapshot below.
-  Press Place order once (also test rapid double-click on a separate attempt).
-  Network must show exactly one `POST /api/checkout`, HTTP 201, no `X-Mock`, amount
-  equal to the cart total. While pending, button/cart controls are disabled.
-  Confirmation shows the returned ID, PREPARING, actual before/after balance and
-  one returned DEBIT audit ID. Balance falls by exactly the total.
-- [ ] **Persistence/navigation — result: ____** View order opens
-  `/browse/orders/<returned-id>` with matching customer, restaurant, amount,
-  timestamp and Preparing badge. Customer and restaurant links open real detail
-  pages; back link returns to Browse orders. Wallet history contains exactly one
-  matching DEBIT row (same ID, amount, resulting balance).
+| Scenario | Customer | Fresh fixture state |
+| --- | --- | --- |
+| 201 | Demo - plenty of money | At least ₹5,000, no active order |
+| 402 | Demo - low balance | ₹45, no active order |
+| 409 | Demo - order in progress | Existing active order |
 
-For independent snapshots, open an interactive shell:
+Fixture IDs end in `d001`, `d002` and `d003` respectively. Record the actual IDs,
+balances and active order before each scenario. Reset fixtures between repeated demos.
 
-```text
-dc exec postgres psql -X -U postgres -d bitestream
-```
+### Success (201)
 
-Paste this SQL after replacing the two values with IDs printed by your run.
-Keep the same session for later queries (`\q` exits).
+- [ ] Select **Demo - plenty of money**, then a restaurant with a real menu.
+  Confirm `GET /api/restaurants/:id/menu` has no `X-Mock` header.
+- [ ] Build a cart from the actual available items and prices. Exercise quantity
+  and add-ons where offered. Compute the total in integer paise; keep it within
+  the displayed wallet balance. Use the displayed menu prices for the expected total.
+- [ ] Place order: exactly one POST, HTTP 201, PREPARING, returned order ID and
+  audit ID, balance reduced by the cart total. Pending controls prevent duplicates.
+- [ ] View order opens `/browse/orders/:id`; customer, restaurant, amount and status
+  match. Wallet shows one DEBIT with the returned ID and resulting balance.
+
+### Insufficient balance (402), top-up and retry
+
+- [ ] Select **Demo - low balance** and a cart exceeding ₹45. Record balance,
+  order count and audit count. Payment returns 402 `INSUFFICIENT_BALANCE`; all
+  three values remain unchanged, with no false success confirmation.
+- [ ] Top up enough to cover the cart. Invalid zero/negative/three-decimal amounts
+  cannot be submitted. A successful top-up returns one CREDIT and the correct
+  balance; the cart remains and checkout does not retry automatically.
+- [ ] Explicitly retry payment. Expect 201, one new order and one DEBIT. Wallet
+  history immediately includes both CREDIT and DEBIT, even if previously cached.
+
+### Active-order conflict (409) and delivery
+
+- [ ] Select **Demo - order in progress**. Choose a cart within its current balance
+  (top up if necessary so insufficient funds does not mask this scenario).
+- [ ] Payment returns 409 `ACTIVE_ORDER_EXISTS`. The active-order link opens the
+  existing order; balance, order count and audit count remain unchanged.
+- [ ] Advance PREPARING → DELIVERING → DELIVERED, waiting for each refetch. A rapid
+  double-click must send one request, not skip a step. Delivery removes the button
+  and frees the customer for another checkout without changing its wallet.
+- [ ] Checkout again: expect 201 with a new order ID and exactly one new DEBIT.
+
+### Database invariant and error handling
+
+Open `dc exec postgres psql -X -U postgres -d bitestream` and substitute real IDs:
 
 ```sql
 \set uid 'PASTE_CUSTOMER_UUID'
 \set rid 'PASTE_RESTAURANT_UUID'
 SELECT wallet_balance FROM users WHERE id=:'uid';
 SELECT count(*) AS orders, count(*) FILTER (WHERE status IN ('PREPARING','DELIVERING')) AS active FROM orders WHERE user_id=:'uid';
-SELECT count(*) AS audits FROM wallet_audit_logs WHERE user_id=:'uid';
-SELECT id,action_type,amount_changed,balance_after,changed_at FROM wallet_audit_logs WHERE user_id=:'uid' ORDER BY seq DESC LIMIT 5;
+SELECT id,action_type,amount_changed,balance_after FROM wallet_audit_logs WHERE user_id=:'uid' ORDER BY seq DESC LIMIT 5;
+SELECT indexdef FROM pg_indexes WHERE indexname='idx_active_user_order';
 ```
 
-### 4.2 Insufficient funds and top-up
-
-- [ ] **402 rollback — result: ____** Choose a low-balance customer from the query,
-  build a cart greater than the displayed wallet, record SQL counts, press Place
-  order. Expect HTTP 402 `INSUFFICIENT_BALANCE`, the API's exact message and Top up
-  button. SQL balance/order/audit counts remain unchanged. No success/DEBIT appears.
-- [ ] **Credit — result: ____** Open Top up. Blank, zero, negative and three-decimal
-  values must disable confirmation. Enter enough to cover the shortfall (e.g. ₹500
-  for a ₹240 cart with balance below ₹240). Confirm once: HTTP 200, exactly one
-  CREDIT, balance increases by entered amount, returned audit ID matches SQL.
-  Stale red payment error disappears, cart survives, no automatic checkout occurs.
-- [ ] **Explicit retry — result: ____** Press Place order. Expect 201, one new
-  PREPARING order and DEBIT. Wallet history must show both CREDIT and DEBIT with
-  correct balances immediately, including when Wallet was previously cached.
-
-### 4.3 Active-order conflict and PostgreSQL invariant
-
-`sql/02_indexes.sql` defines **idx_active_user_order**, UNIQUE on **orders(user_id)**,
-predicate **status IN ('PREPARING','DELIVERING')**. DELIVERED rows do not participate.
-The database permits many delivered orders but at most one active order/customer.
-
-- [ ] **Inspect metadata — result: ____** Run:
+- [ ] With an active order, execute `BEGIN;`, then the following insert, then
+  `ROLLBACK;` as separate statements. Expect SQLSTATE 23505 on the named partial
+  unique index. Always roll back the deliberate error.
 
 ```sql
-SELECT indexname,indexdef FROM pg_indexes
-WHERE schemaname='public' AND indexname='idx_active_user_order';
-```
-
-- [ ] **409 rollback — result: ____** With the successful order active and sufficient
-  wallet balance for another cart, return to Checkout and attempt a second order.
-  Expect HTTP 409 `ACTIVE_ORDER_EXISTS`, actual backend message and View active
-  order pointing to the existing order UUID. Balance/order/audit counts from the
-  SQL snapshot remain identical. No second DEBIT or confirmation is displayed.
-  Repeat while DELIVERING if desired. Insufficient funds can take precedence over
-  409, so fund the wallet before this particular demonstration.
-- [ ] **Database enforcement — result: ____** In the SQL session, while the first
-  order is active, execute these statements one at a time:
-
-```sql
-BEGIN;
 INSERT INTO orders(id,user_id,restaurant_id,total_amount,status)
 VALUES(gen_random_uuid(),:'uid',:'rid',1,'PREPARING');
--- Expected ERROR: duplicate key violates unique constraint idx_active_user_order.
-ROLLBACK;
 ```
 
-The deliberate error is expected, not a failed demo. Always ROLLBACK. This bypasses
-React and Express and proves the invariant is PostgreSQL-enforced. The automated
-runner checks SQLSTATE `23505` and the exact constraint name using the same approach.
-This direct-insert demonstration is sequential. For real overlapping requests,
-the demo runner additionally locks a fresh eligible customer's wallet row, starts
-five HTTP checkouts, waits until `pg_stat_activity` shows all five waiting for locks,
-then releases the lock. Expected: one 201, four 409 responses, one order and one
-DEBIT; audit/order counts and balance must change only once. If five waiters are
-not observed, the script fails rather than claiming concurrency was verified.
+- [ ] The automated runner observes five simultaneous lock-waiting checkouts:
+  one 201, four 409s, one order and one debit.
+- [ ] Advance an already delivered order: 409 `INVALID_TRANSITION`, refreshed
+  Delivered state. Check detail 404, API-down/retry and phone-width usability.
 
-### 4.4 Advancement and another checkout
+## 5. Analytics
 
-- [ ] **Preparing → Delivering — result: ____** Use View active order. Rapidly
-  double-click Advance status: exactly one POST in Network, one transition, button
-  disabled during request/refetch, refreshed badge Delivering, matching success
-  message. SQL `SELECT status FROM orders WHERE user_id=:'uid' AND status <> 'DELIVERED';`
-  confirms DELIVERING. No wallet/audit change.
-- [ ] **Delivering → Delivered — result: ____** Click once after re-enable. Expect
-  HTTP 200, Delivered badge and message, no Advance button, zero active rows.
-  Customer Detail now shows no active order. No wallet/audit change.
-- [ ] **Checkout allowed again — result: ____** Return to Checkout, build a funded
-  cart and pay. Expect 201, a different UUID, exactly one active order and one new
-  DEBIT. This completes the partial-index demonstration.
-
-### 4.5 Stale page and error states
-
-- [ ] **Stale 409 — result: ____** Open the same active order in two tabs. Keep
-  tab A on its old status, use tab B to advance through delivery, then press Advance
-  in A. If focus refetch updates A first, use a second browser session or advance
-  via the API while keeping A focused. Expect 409 `INVALID_TRANSITION`, exact API
-  message, then GET refresh to Delivered and no button. Blue delivered note plus
-  red API error is the known optional #19 cosmetic duplication; do not change it here.
-- [ ] **Failures — result: ____** Visit `/browse/orders/00000000-0000-4000-8000-000000000000`:
-  expect friendly 404. Use browser DevTools Offline while loading a detail page:
-  expect loading/error/retry rather than blank screen. Restore Online and retry.
-  Test slow network for visible pending controls; do not alter shared database data.
-- [ ] **Phone — result: ____** At about 400 px wide, verify no sideways scroll,
-  usable cart/top-up/buttons, wrapping IDs, and no unexpected console errors.
-
-## 5. Workflow 2: Analytics
-
-- [ ] **Availability — result: ____** Open `/analytics`. If it says “To build”, mark
-  the following UI steps BLOCKED. Inspect Network/HTTP headers for `/api/analytics/summary`,
-  `/revenue?restaurantId=<id>`, `/ranking?page=1&pageSize=20` and POST `/summary/refresh`.
-  `X-Mock: true` means the response and changing timestamp are not database evidence.
-- [ ] **SQL verification — result: ____** Run the real report with no host psql:
-
-PowerShell:
-
-```powershell
-Get-Content -Raw sql/06_window_analytics.sql | dc exec -T postgres psql -X -U postgres -d bitestream -v ON_ERROR_STOP=1
-```
-
-Bash/zsh:
-
-```bash
-dc exec -T postgres psql -X -U postgres -d bitestream -v ON_ERROR_STOP=1 < sql/06_window_analytics.sql
-```
-
-Verify delivered-only daily revenue; `DENSE_RANK()` gives equal totals equal ranks.
-The inherited moving average is **seven rows with revenue**, not seven calendar days
-when dates are missing (`ROWS BETWEEN 6 PRECEDING AND CURRENT ROW`). Record this
-semantic limitation rather than relabelling it as a verified seven-calendar-day chart.
-- [ ] **Materialized view — result: ____** In psql run `CALL sp_refresh_restaurant_summary();`
-  then compare `SELECT sum(completed_order_count),sum(completed_revenue) FROM restaurant_order_summary;`
-  with `SELECT count(*),sum(total_amount) FROM orders WHERE status='DELIVERED';`.
-  Expected equal. The runner asserts this. The inherited SQL does not persist a
-  last-refresh timestamp; the mocked API timestamp is not proof of a refresh.
-- [ ] **UI after dependency merge — result: ____** Select a seeded restaurant,
-  compare completed revenue/counts, daily trend and moving average to SQL 06;
-  compare ranking and pagination; deliver an order, press Refresh, verify changed
-  summary values and real timestamp contract. Change restaurant and verify new data.
-  Exercise loading, API failure/retry and a restaurant with no delivered orders.
-  Currently BLOCKED by #10 (calendar-window/refresh-log SQL), #15 (real analytics
-  routes) and #22 (Analytics UI).
-
-## 6. Workflow 3: nearby drivers / Map
-
-- [ ] **Availability — result: ____** Open `/map`; verify whether the map/selector
-  exists. Inspect `/api/drivers/nearby?lat=12.9716&lng=77.5946&radius=5000`.
-  Current header `X-Mock: true` blocks real radius/freshness/driver conclusions.
-- [ ] **Indexes/freshness — result: ____** Open `dc exec mongo mongosh bitestream`:
-
-```javascript
-db.DriverPings.getIndexes()
-db.DriverPings.find({}, {createdAt:1}).sort({createdAt:-1}).limit(1)
-db.DriverPings.countDocuments({createdAt:{$gte:new Date(Date.now()-7200000)}})
-db.DriverPings.aggregate([
-  {$geoNear:{near:{type:'Point',coordinates:[77.5946,12.9716]},key:'location',distanceField:'distanceMeters',maxDistance:5000,spherical:true,query:{active:true,createdAt:{$gte:new Date(Date.now()-7200000)}}}},
-  {$limit:5},{$project:{_id:0,driverId:1,distanceMeters:1,createdAt:1}}
-]).toArray()
-```
-
-Expected `location: '2dsphere'` and `createdAt` TTL `expireAfterSeconds:7200`.
-Distances are metres, coordinate order longitude then latitude. TTL is asynchronous;
-explicit timestamp filtering matters. The two-hour window above checks unexpired
-storage, not a product definition of “live”. Mongo 02 returns the closest active
-ping only; it lacks recent-only filtering and latest-ping-per-driver deduplication.
-- [ ] **Replenish if needed — result: ____** There is no simulator in this branch.
-  After integrating already-merged PR #44 from main, use its real service instead:
-  `dc up -d --no-deps ping-simulator`, then `dc logs --tail 20 ping-simulator` and
-  inspect pings from the last minute. The following generator fallback applies to
-  the older `a8f8700` baseline only.
-  Existing generator can append pings without more menus/reviews, only in this
-  disposable environment:
-
-```text
-dc run --rm --no-deps seed python3 /work/data_generation/mongo_seeder.py --pings 10000 --menus 0 --reviews 0
-```
-
-It still generates timestamps over the preceding three hours; inspect timestamps
-again. Do not assume all new rows are live. For a short freshness policy, measure
-the count in that policy's window instead of changing old timestamps.
-- [ ] **UI after dependency merge — result: ____** Choose a restaurant or map point,
-  verify origin marker, radius circle, unique available drivers, increasing distance
-  order, all within radius, and real API/Mongo agreement. Change radius/origin and
-  verify results; choose a distant point for empty state. Confirm five-second polling,
-  latest ping per driver and the documented freshness policy. Exercise slow/offline
-  loading/error recovery. On this tested branch, BLOCKED until PR #44 (issues #7,
-  #8, #16, #23) is integrated from main. It is already merged upstream; do not
-  describe it as unfinished Member D work. Main's real API uses a ten-minute
-  window and latest-ping-per-driver selection; verify those contracts on retest.
-
-## 7. Workflow 4: Reviews and menu
-
-- [ ] **Availability/linkage — result: ____** Open `/reviews?restaurantId=<PostgreSQL-id>`.
-  Current page is a placeholder; menu API sends `X-Mock: true`. In mongosh compare
-  `db.Menus.findOne({restaurantId:'PASTE_POSTGRES_UUID'})` and
-  `db.Reviews.countDocuments({restaurantId:'PASTE_POSTGRES_UUID'})` to the API.
-  Seed ID mismatch is a blocker, not evidence that every restaurant has no reviews.
-- [ ] **Real statistics — result: ____** In mongosh obtain
-  `db.Reviews.findOne().restaurantId`, then open
-  `/api/reviews/stats?restaurantId=<that-id>` on port 14000. Independently aggregate:
-
-```javascript
-const rid = db.Reviews.findOne().restaurantId;
-db.Reviews.aggregate([
-  {$match:{restaurantId:rid}},
-  {$facet:{
-    ratings:[{$group:{_id:'$rating',count:{$sum:1}}},{$sort:{_id:1}}],
-    tags:[{$unwind:'$sentimentTags'},{$group:{_id:'$sentimentTags',count:{$sum:1}}},{$sort:{count:-1,_id:1}}],
-    overall:[{$group:{_id:null,total:{$sum:1},average:{$avg:'$rating'}}}]
-  }}
-]).toArray()
-```
-
-Compare count, average rounded to two decimals, all five star buckets (missing SQL-
-style groups become zero), tag frequencies and tie ordering. Also verify unfiltered
-`/api/reviews/stats` against all Reviews, and an unknown valid UUID gives null average,
-zero total, five zero buckets and empty tags. The runner independently recomputes
-nonempty restaurant results from documents, rather than reusing the API pipeline.
-- [ ] **UI after dependency merge — result: ____** Select a restaurant and then all
-  restaurants; verify average/count, distribution and tags against the above.
-  Verify menu categories/items/prices/availability/add-ons against `Menus.findOne`.
-  Review text is stored in MongoDB but there is no individual-review-list endpoint
-  in this branch; do not invent one or claim it was rendered. Test empty menu/reviews,
-  loading and API error/retry. BLOCKED by #24 (Reviews UI), #17 (real menu route)
-  and #5 (PostgreSQL/Mongo seed linkage).
-
-## 8. Final consistency and teardown
-
-- [ ] **Invariant — result: ____** SQL below returns no rows:
+- [ ] Open `/analytics`; verify real summary cards, revenue trend, seven-day
+  moving average, ranking and refresh timestamp. All analytics responses lack `X-Mock`.
+- [ ] Explicitly select a restaurant; compare its trend to
+  `SELECT * FROM fn_restaurant_revenue_trend('<restaurant UUID>');`.
+  SQL 09 uses a six-day lookback plus the current date; its average includes
+  days with delivered orders in that window, not zero-filled missing days.
+- [ ] Compare ranking/pagination to `SELECT * FROM fn_restaurant_revenue_ranking();`.
+  Equal revenue totals share a DENSE_RANK. Summary/ranking use the materialized view.
+- [ ] Deliver an order, click **Refresh**, and confirm the summary/ranking and
+  last-refreshed timestamp update. Compare materialized-view totals to delivered
+  orders; `restaurant_summary_refresh_log` records the refresh.
+- [ ] Exercise restaurant changes, empty results and API-error/retry behavior.
 
 ```sql
-SELECT user_id,count(*) FROM orders WHERE status IN ('PREPARING','DELIVERING')
-GROUP BY user_id HAVING count(*)>1;
-SELECT u.id FROM users u WHERE wallet_balance IS DISTINCT FROM
-(SELECT balance_after FROM wallet_audit_logs WHERE user_id=u.id ORDER BY seq DESC LIMIT 1);
+SELECT sum(completed_order_count),sum(completed_revenue) FROM restaurant_order_summary;
+SELECT count(*),sum(total_amount) FROM orders WHERE status='DELIVERED';
+SELECT * FROM restaurant_summary_refresh_log ORDER BY refreshed_at DESC LIMIT 1;
 ```
 
-- [ ] **Regression — result: ____** Re-run API tests after the demo writes; wallet
-  chains should remain valid. Check browser console, phone layout and `git status`.
-  Changes should be tests/docs/demo tooling only. No UI/schema/API changes required.
-- [ ] **Teardown — result: ____** After saving evidence, `dc down` stops only the demo
-  project and retains its volumes. Do not use the unqualified default-project command.
-  Delete demo volumes only when you explicitly no longer need evidence; never delete
-  the ordinary development volumes as part of this checklist.
+## 6. Map and nearby drivers
 
-## 9. Execution record — 2026-10-15 Asia/Kolkata
+- [ ] Confirm `dc logs --tail 20 ping-simulator` shows ongoing writes. Open `/map`.
+- [ ] Filter/select an origin restaurant. Verify the restaurant marker, 5 km circle,
+  driver markers, sorted nearby-driver list and distance/last-updated statistics.
+  The screen uses a fixed 5 km radius; there is no radius control.
+- [ ] Observe updates across successive five-second polls and use Refresh. Change
+  origin restaurant and confirm the map recenters. Polling must not reset manual pan/zoom.
+- [ ] Inspect `GET /api/drivers/nearby?lat=...&lng=...&radius=5000`: HTTP 200, no mock
+  header, unique driver IDs, ascending distances within 5 km. Only each driver's
+  latest fresh active ping qualifies; the API freshness window is ten minutes.
+- [ ] Verify the DriverPings 2dsphere index and 7200-second TTL index. TTL cleanup
+  is asynchronous and is distinct from the API's freshness filter.
+- [ ] Exercise no-drivers and API-error/retry states and phone layout. Do not
+  infer a broken map merely from an empty result; inspect simulator freshness.
 
-Source: `a8f8700` plus #26 test/documentation changes, branch
-`feature/issue-26-checkout-tests-demo`. Disposable project
-`bitestream-issue26-20261015`, fresh project-labelled volumes verified absent before
-creation. Existing `bitestream` project preserved. RESET=1 completed successfully
-with full default seed sizes. PostgreSQL seed counts matched section 2; Mongo output
-was 500 menus, 10,000 reviews, 494,278 retained pings (TTL already active).
-
-Measured results, exact limitations and the later-main dependency matrix are in
-[demo_results.md](demo_results.md). Do not interpret unchecked template boxes as PASS.
-
-## 10. Final integration retest before closing #26
-
-- [ ] With the branch owner's authorization, bring the latest main into the review
-  branch. Do not cherry-pick or reimplement teammates' features. Recheck PR #44 and
-  #5, #10, #15, #17, #22, #24 against code, not only issue state.
-- [ ] Update the dependency matrix and verify real endpoints no longer send X-Mock.
-- [ ] Use a new disposable project and repeat RESET=1, then start the simulator if
-  present. Confirm PostgreSQL/Mongo restaurant linkage and fresh pings.
-- [ ] Execute every previously BLOCKED/NOT RUN UI/API step, including offline/retry
-  and map polling, and record evidence separately from these reusable instructions.
-- [ ] Run all frontend/API tests and build again; totals may grow after merges.
-- [ ] Only when all four workflows pass the full fresh-seed run, use `Closes #26`.
-  Until then, use a **Draft PR with `Refs #26`**. No automatic close, merge or push.
-
-
-## 11. Final integration execution — 2026-10-15
-
-**Branch:** `feature/issue-26-checkout-tests-demo` at commit `c73df5d`  
-**Source:** Merged `upstream/main` (`eb46542`) into baseline `4523dbe`  
-**Project:** `bitestream-issue26-final` (new disposable environment)
-
-### Integration Completed
-
-✅ **All dependencies merged:**
-- #5 (PostgreSQL/MongoDB restaurant linkage)
-- #10 (SQL 09: analytics functions with calendar-window and refresh logging)
-- #15 (Real analytics routes)
-- #17 (Real menu route)
-- #22 (Analytics UI)
-- #24 (Reviews UI)
-- #44 (Map implementation with ping simulator)
-
-### Fresh Seed Results
-
-**Seed execution:** RESET=1 completed successfully  
-**SQL files applied:** 01, 02, 03, 04, 05, 07, 08, 08 (orders_recent), **09 (restaurant_window)**, fixtures/demo_customers
-
-**PostgreSQL counts:**
-- Users: 10,000
-- Restaurants: 500
-- Orders: 120,000
-- Audit logs: 130,000
-
-**MongoDB counts:**
-- Menus: 500
-- Reviews: 10,000
-- DriverPings: 500,000 initial (simulator continues adding; 529,000 at test time)
-
-### Test Results
-
-**Frontend:** ✅ **108/108 PASS** (23.42s)
-- Includes new Analytics, Map, and Reviews UI tests from merged PRs
-- All Checkout tests (20) pass
-- Production build succeeds (789 modules, 5.20s)
-
-**API:** ✅ **88/88 PASS** (18.10s)
-- All workflows verified against real databases
-- Checkout: 17 tests PASS
-- Analytics: 14 tests PASS
-- Drivers (Map): 9 tests PASS (timeout fix applied)
-- Reviews: 3 tests PASS
-- Menu: 4 tests PASS
-- Demo customers: 3 tests PASS
-- Browse: 14 tests PASS
-- Audit: 11 tests PASS
-- Health/API: 6 tests PASS
-- Errors: 7 tests PASS
-
-**Driver tests timeout fix:** Two tests querying 529K pings (29K recent) required justified 10-second timeouts. Root cause: realistic dataset load (dedup + $geoNear aggregation takes 3-5s). Tests verify correct behavior under production-like load.
-
-### Demo-Check Script: FULL PASS ✅
-
-Executed `api/scripts/demo-check.mjs` with `DEMO_DISPOSABLE=1`:
-
-**All checks passed:**
-- ✅ Checkout workflow: concurrent requests (5→1 success, 4 conflicts), wallet debit, order creation
-- ✅ Partial unique index: SQLSTATE 23505 enforcement
-- ✅ Top-up workflow: 402→credit→retry
-- ✅ Analytics: **mock: null** (real routes working), materialized view matches delivered totals
-- ✅ Reviews: **mock: null** (real stats and menu routes), MongoDB linkage confirmed
-- ✅ Map: **mock: null** (real nearby API), found 502,800 recent pings, 5 drivers within 5km
-- ✅ Consistency: zero duplicate active orders, zero balance mismatches
-
-### Workflow Status: ALL READY ✅
-
-| Workflow | Status | Evidence |
-|----------|--------|----------|
-| 1. Checkout | ✅ READY | 20 tests pass, demo-check pass, concurrent request handling verified |
-| 2. Analytics | ✅ READY | 14 tests pass, real routes (no X-Mock), SQL 09 functions present, full UI |
-| 3. Map | ✅ READY | 9 tests pass, real $geoNear API, simulator running, full UI |
-| 4. Reviews/Menu | ✅ READY | 7 tests pass, real stats/menu routes, full UI, PG/Mongo linkage |
-
-**All four workflows verified end-to-end with real databases and fresh seed.**
-
-### Test Timeout Analysis
-
-**Issue:** Two driver tests initially timed out at 5 seconds.
-
-**Root cause identified:** Resource contention from large dataset
-- Total pings: 529,000 (simulator continuously adding)
-- Recent pings (10 min window): ~29,000
-- Aggregation performance measured:
-  - Step 1 (deduplication): 360ms for 29K pings → 200 unique drivers
-  - Step 2 ($geoNear query): 2,673ms for geo-filtering
-  - Total: 3,034ms minimum
-
-**Resolution:** Added justified 10-second timeout to affected tests with explanatory comment:
-```javascript
-// These two tests query the full nearby drivers API against the seeded dataset.
-// With ~500K pings (growing via simulator) and ~29K recent pings, the deduplication
-// and $geoNear aggregation can take 3-5 seconds. 10s timeout accommodates this realistic load.
+```text
+dc exec -T mongo mongosh bitestream --quiet --eval "printjson(db.DriverPings.getIndexes())"
 ```
 
-**Why justified:**
-1. Tests verify correct behavior under production-like load
-2. Query complexity is inherent to the two-stage dedup + geospatial algorithm
-3. Performance is acceptable for production use (< 5s response time)
-4. Tests pass reliably with appropriate timeout
-5. Alternative (smaller test dataset) would not verify realistic production behavior
+## 7. Reviews and menu
 
-**Not a defect:** Production API works correctly; demo-check.mjs confirms real nearby driver queries succeed.
+- [ ] Open `/reviews`. Verify average rating, review count, rating distribution
+  and top sentiment tags, initially across all restaurants.
+- [ ] Explicitly select a restaurant. Verify charts and menu match that restaurant;
+  both stats and menu endpoints return real data without `X-Mock`.
+- [ ] Compare total/average, five rating buckets and tag counts to Mongo Reviews
+  documents for the same PostgreSQL restaurant UUID. The runner independently
+  computes these values and checks a linked Mongo Menus document.
+- [ ] Inspect real categories, items, availability, prices and add-ons. Compare the
+  same restaurant in Checkout; do not assume a fixed mock menu.
+- [ ] Exercise no reviews, missing menu, loading and error/retry states. A missing
+  menu is an explicit empty/not-found state, not a fabricated fallback menu.
 
-### Reproducibility Confirmed
+## 8. Consistency, evidence and teardown
 
-**SQL 09 setup:** Verified in `docker/seed/seed.sh` - all SQL files 01-09 (except 06) are applied automatically. Fresh clone will apply SQL 09 during RESET=1 seed.
+- [ ] Zero customers have more than one active order. Current wallet balances
+  equal the most recent audit balances. The runner asserts both invariants.
+- [ ] Record tested commit, date, project, exact suite totals, build outcome and
+  JSON check statuses in `demo_results.md`. Distinguish automated checks from
+  manual browser steps; leave unperformed steps NOT RUN.
+- [ ] Record any failure with its actual response/output rather than an obsolete
+  dependency label. All four workflows are implemented; no pending Map/menu/UI
+  merge is part of this checklist.
+- [ ] Stop the disposable environment when done: `dc down` preserves evidence
+  volumes. Only use `dc down -v` when you deliberately want to discard this
+  project's databases. Never run teardown against the ordinary project.
 
-**Files modified:** Only test timeout adjustments in `api/tests/drivers.test.js` (2 lines + comment)
-
-### Summary
-
-PR #48 integration is **complete and verified**. All four workflows functional, all tests pass, no blocking issues remain. Ready for review and merge.
+PR wording: **Closes #26**. Keep the body about the final test/checklist changes;
+put dated execution totals in the results document instead of the PR body.

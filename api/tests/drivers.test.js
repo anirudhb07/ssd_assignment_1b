@@ -51,8 +51,8 @@ describe('GET /api/drivers/nearby', () => {
   });
 
   // These two tests query the full nearby drivers API against the seeded dataset.
-  // With ~500K pings (growing via simulator) and ~29K recent pings, the deduplication
-  // and $geoNear aggregation can take 3-5 seconds. 10s timeout accommodates this realistic load.
+  // Allow headroom for seeded-data volume and shared CI/Docker load. This timeout
+  // is not an expected response time or a performance benchmark.
 
   it('answers real query with correct structure and without X-Mock header', { timeout: 10000 }, async () => {
     const res = await request(app).get(`/api/drivers/nearby?lat=${centerLat}&lng=${centerLng}`);

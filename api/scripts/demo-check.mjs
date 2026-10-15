@@ -13,6 +13,7 @@ async function request(path, body, expected = 200) {
   });
   const data = await response.json();
   assert.equal(response.status, expected, JSON.stringify(data));
+  assert.equal(response.headers.get('x-mock'), null, `${path} must use the real API`);
   return { data, mock: response.headers.get('x-mock'), status: response.status };
 }
 async function snapshot(id) {
@@ -129,13 +130,16 @@ try {
     sum(completed_revenue) AS revenue FROM restaurant_order_summary`)).rows[0];
   assert.deepEqual(summary, totals);
   const analytics = await request('/analytics/summary');
-  evidence.checks.analytics = { status: analytics.mock ? 'BLOCKED' : 'NOT RUN', mock: analytics.mock, sqlTotals: totals, materializedViewMatches: true };
+  assert.equal(analytics.data.totals.completedOrders, totals.count);
+  assert.equal(analytics.data.totals.completedRevenue, totals.revenue);
+  evidence.checks.analytics = { status: 'PASS', mock: analytics.mock, sqlTotals: totals, materializedViewMatches: true };
 
   const db = await getDb();
   const pgRestaurantStats = (await request(`/reviews/stats?restaurantId=${restaurant.id}`)).data;
   const sampleReview = await db.collection('Reviews').findOne();
   assert.ok(sampleReview, 'Seed must contain reviews.');
-  const reviewStats = (await request(`/reviews/stats?restaurantId=${sampleReview.restaurantId}`)).data;
+  const reviewResponse = await request(`/reviews/stats?restaurantId=${sampleReview.restaurantId}`);
+  const reviewStats = reviewResponse.data;
   const reviews = await db.collection('Reviews').find({ restaurantId: sampleReview.restaurantId }).toArray();
   assert.ok(reviews.length > 0);
   assert.equal(reviewStats.totalReviews, reviews.length);
@@ -148,7 +152,10 @@ try {
   const empty = (await request('/reviews/stats?restaurantId=00000000-0000-4000-8000-000000000000')).data;
   assert.equal(empty.totalReviews, 0); assert.equal(empty.averageRating, null);
   const menu = await request(`/restaurants/${restaurant.id}/menu`);
-  evidence.checks.reviews = { status: 'BLOCKED', apiStatistics: 'PASS', reviewStats, pgRestaurantStats, empty, menuMock: menu.mock, mongoMenuExists: !!await db.collection('Menus').findOne({ restaurantId: restaurant.id }) };
+  const menuDocument = await db.collection('Menus').findOne({ restaurantId: restaurant.id });
+  assert.ok(menuDocument, 'The PostgreSQL restaurant must have a linked Mongo menu.');
+  assert.deepEqual(menu.data.categories, menuDocument.categories);
+  evidence.checks.reviews = { status: 'PASS', mock: reviewResponse.mock, apiStatistics: 'PASS', reviewStats, pgRestaurantStats, empty, menuMock: menu.mock, mongoMenuExists: true };
 
   const indexes = await db.collection('DriverPings').indexes();
   assert.ok(indexes.some((index) => index.key.location === '2dsphere'));
@@ -159,7 +166,15 @@ try {
     { $limit: 5 }, { $project: { _id: 0, driverId: 1, createdAt: 1, distanceMeters: 1 } },
   ]).toArray();
   const map = await request('/drivers/nearby?lat=12.9716&lng=77.5946&radius=5000');
-  evidence.checks.map = { status: 'BLOCKED', mock: map.mock, indexes, recentPingCount: await db.collection('DriverPings').countDocuments({ createdAt: { $gte: cutoff } }), nearby };
+  assert.deepEqual(map.data.origin, { lat: 12.9716, lng: 77.5946 });
+  assert.equal(map.data.radiusMeters, 5000);
+  assert.ok(Array.isArray(map.data.drivers));
+  assert.equal(new Set(map.data.drivers.map((driver) => driver.driverId)).size, map.data.drivers.length);
+  for (const [i, driver] of map.data.drivers.entries()) {
+    assert.ok(driver.distanceMeters >= 0 && driver.distanceMeters <= 5000);
+    if (i) assert.ok(driver.distanceMeters >= map.data.drivers[i - 1].distanceMeters);
+  }
+  evidence.checks.map = { status: 'PASS', mock: map.mock, indexes, recentPingCount: await db.collection('DriverPings').countDocuments({ createdAt: { $gte: cutoff } }), nearby, returnedDrivers: map.data.drivers.length };
   evidence.checks.consistency = (await pool.query(`SELECT
     (SELECT count(*) FROM (SELECT user_id FROM orders WHERE status <> 'DELIVERED' GROUP BY user_id HAVING count(*)>1) x) AS duplicate_active,
     (SELECT count(*) FROM users u WHERE wallet_balance IS DISTINCT FROM
