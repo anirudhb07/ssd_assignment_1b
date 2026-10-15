@@ -15,7 +15,8 @@ usersRouter.get('/', async (req, res) => {
   const search = String(req.query.search ?? '').trim();
 
   const where = search ? 'WHERE name ILIKE $1' : '';
-  const params = search ? [`%${search}%`] : [];
+  // Escape % _ \\ so the text is matched literally (ILIKE's default escape is \\).
+  const params = search ? [`%${search.replace(/[\\%_]/g, '\\$&')}%`] : [];
 
   const [rows, count] = await Promise.all([
     query(
@@ -98,11 +99,19 @@ usersRouter.get('/:id/audit', async (req, res) => {
         LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
       [...params, pageSize, offset],
     ),
-    query(`SELECT COUNT(*) AS total FROM wallet_audit_logs ${where}`, params),
+    query(
+      `SELECT COUNT(*) AS total,
+              COALESCE(SUM(amount_changed) FILTER (WHERE action_type = 'CREDIT'), 0) AS credits,
+              COALESCE(SUM(amount_changed) FILTER (WHERE action_type = 'DEBIT'), 0)  AS debits
+         FROM wallet_audit_logs ${where}`,
+      params,
+    ),
   ]);
   if (user.rowCount === 0) throw notFound('That customer');
 
-  res.json(paged(rows.rows, count.rows[0].total, { page, pageSize }));
+  // Totals over every matching row (not just this page), for the Wallet screen.
+  const { total, credits, debits } = count.rows[0];
+  res.json({ ...paged(rows.rows, total, { page, pageSize }), totalCredits: credits, totalDebits: debits });
 });
 
 // POST /api/users/:id/topup { amount } — REAL.

@@ -194,6 +194,9 @@ export function MapPage() {
           <Button type="submit" variant="secondary" disabled={!validInput}>Set origin</Button>
           {customOrigin && <Button variant="secondary" onClick={() => { setCustomOrigin(null); setLatInput(''); setLngInput(''); }}>Back to restaurant</Button>}
         </form>
+        {(latInput || lngInput) && !validInput && (
+          <p className="small" role="status">Enter a latitude from −90 to 90 and a longitude from −180 to 180.</p>
+        )}
         <p className="muted small">
           Origin: <strong>{originName ?? '—'}</strong>
           {origin && ` (${origin.lat.toFixed(4)}, ${origin.lng.toFixed(4)})`}. Click the map, or type a point, to search around it.

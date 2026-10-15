@@ -247,6 +247,7 @@ function MenuAndCart({ menu, restaurant, customer, onChangeRestaurant }) {
         {(payment.error || showTopup) && <div className="stack checkout-feedback" ref={feedback}>
           {payment.error && <>
             <p className="alert alert--error" role="alert">{payment.error.message}</p>
+            {payment.error.code === 'NETWORK' && <p className="muted small">The order may or may not have gone through. Check the wallet and orders before trying again.</p>}
             {payment.error.status === 402 && payment.error.code === 'INSUFFICIENT_BALANCE' && !showTopup && <Button variant="secondary" disabled={busy} onClick={() => setShowTopup(true)}>Top up</Button>}
             {payment.error.status === 409 && payment.error.code === 'ACTIVE_ORDER_EXISTS' && <QueryState query={user}>{(data) => data.activeOrder
               ? <Link to={`/browse/orders/${data.activeOrder.id}`} className="btn btn--secondary">View active order</Link>

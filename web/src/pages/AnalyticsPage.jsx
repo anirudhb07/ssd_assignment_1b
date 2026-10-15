@@ -126,6 +126,13 @@ export function AnalyticsPage() {
               </Card>
               <Card>
                 <Stat
+                  label="Average order value"
+                  value={data.totals.completedOrders ? formatMoney(Math.round((data.totals.completedRevenue / data.totals.completedOrders) * 100) / 100) : '—'}
+                  hint="Completed revenue ÷ completed orders"
+                />
+              </Card>
+              <Card>
+                <Stat
                   label="Summary last refreshed"
                   value={data.lastRefreshedAt ? formatDateTime(data.lastRefreshedAt) : 'Never'}
                   hint={data.lastRefreshedAt ? undefined : 'Press Refresh to build the summary.'}
