@@ -4,7 +4,7 @@ The contract between `web/` and `api/`. Agree changes here first, then change th
 
 - Base URL: `http://localhost:4000/api` (the web app calls `/api/...` and Vite forwards it).
 - Request and response bodies are JSON. Money is in rupees as a number (`640.5`), timestamps are ISO 8601 strings.
-- **Status:** `REAL` means it queries the database. `MOCK` means it returns sample data in the final shape and sets the response header `X-Mock: true`. When you make a route real, update its status here.
+- **Status:** every route is `REAL`: it queries the databases. (During development, unfinished routes returned sample data marked `MOCK`; none are left.)
 
 ## Conventions
 

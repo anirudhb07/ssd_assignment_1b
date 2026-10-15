@@ -3,10 +3,13 @@
 // Whole rupees without paise (₹4,250), otherwise two decimals (₹12,890.50).
 const rupees = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
 const rupeesAndPaise = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
-const date = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+// Every time is shown in India Standard Time, whatever the viewer's computer
+// is set to, so it matches the Wallet date filter (Indian calendar days).
+const IST = 'Asia/Kolkata';
+const date = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: IST });
 // 24-hour clock ("12 Oct, 10:42"), as in docs/design/README.md; en-IN defaults to 12-hour.
-const dateTime = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
-const time = new Intl.DateTimeFormat('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
+const dateTime = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: IST });
+const time = new Intl.DateTimeFormat('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23', timeZone: IST });
 
 export const formatMoney = (value) =>
   value == null ? '—' : (Number.isInteger(value) ? rupees : rupeesAndPaise).format(value);

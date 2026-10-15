@@ -11,6 +11,18 @@ Assignment 2 adds a **web front end** and a small **API layer** on top of the As
 - **Demo video:** _TODO_
 - **Inherited from:** https://github.com/charmin-v/ssd_assignment_1 (Assignment 1 final commit `7022714778d3a1a8e6a39a619c7cdabc642db7e9`)
 
+## Documents
+
+| Document | What's in it |
+| --- | --- |
+| [`docs/handover_note.md`](docs/handover_note.md) | What we inherited, what worked, what didn't, what we changed and why |
+| [`docs/api_endpoints.md`](docs/api_endpoints.md) | The API contract: every endpoint, its request and response, and the error codes |
+| [`docs/design/`](docs/design/) | Users, a users × screens table, the wireframes for every screen and the shared wireframe kit |
+| [`docs/relational_erd.png`](docs/relational_erd.png) | PostgreSQL entity-relationship diagram |
+| [`docs/mongo_schema_map.json`](docs/mongo_schema_map.json) | MongoDB collections, fields and indexes |
+| [`performance/`](performance/) | Query plans (`EXPLAIN ANALYZE`, `explain("executionStats")`) and the scripts that recapture them; summary in [Performance](#performance) |
+| [Screens](#screens), [Demo path](#demo-path), [What the tests prove](#what-the-tests-prove) | Below in this README |
+
 ## Quick Start
 
 With Docker installed (see [Development Setup](#development-setup-docker) if it isn't):
@@ -239,14 +251,14 @@ Copy `.env.example` to `.env` and edit the values. `.env` is git-ignored, so you
 | Seed container exited with an error | Run `docker compose logs seed` to see which script failed. |
 | Seed fails with `$'\r': command not found` (Windows) | `docker/seed/seed.sh` has Windows line endings. Pull the latest `main` (it includes `.gitattributes`), then run `rm docker/seed/seed.sh` and `git checkout -- docker/seed/seed.sh` to get a copy with Unix line endings. |
 | Saving a file doesn't reload the web app (Windows) | Set `WEB_POLLING=true` in `.env`, then `docker compose up -d web`. |
-| The app shows old data or mock data after `git checkout` or `git pull` (e.g. a route marked REAL still sends the `X-Mock` header) | The API's auto-restart can fire halfway through a branch switch and load a mix of old and new files. Run `docker compose restart api` (and `docker compose restart web` if a screen looks out of date). |
+| The app shows old data or an old screen after `git checkout` or `git pull` | The API's auto-restart can fire halfway through a branch switch and load a mix of old and new files. Run `docker compose restart api` (and `docker compose restart web` if a screen looks out of date). |
 | Data looks wrong or half-loaded | Run `docker compose run --rm -e RESET=1 seed`. |
 
 ## Working on Your Part
 
 ### Team
 
-Agree who takes which letter, then have **one person** fill in all four rows in a single commit to `main`. If each person edits their own row on a separate branch, Git reports conflicts because the rows sit next to each other. Everything else in this README, the code `TODO`s and the screen placeholders refers to members by letter.
+Elsewhere in this README and in the handover note, members are referred to by letter.
 
 | Member | Name | Roll number | GitHub username | Owns |
 | --- | --- | --- | --- | --- |
@@ -268,17 +280,7 @@ Each member owns one workflow end to end: the database fix, the API routes and t
 
 D also owns the release work: `docs/handover_note.md`, this README's Assumptions, Changes and Contribution sections, the demo video and the final zip.
 
-**Where to start:** A adds the two procedures, then makes checkout real. B does fix 2, then the users and orders routes and tabs (copy the Restaurants route and tab). C builds the Reviews screen (its endpoint is already real), then fix 1. D writes the ping simulator, then the Map screen against the mock route.
-
 Some files are **shared**: `web/src/styles/tokens.css`, `web/src/components/ui/`, `web/src/api/endpoints.js`, `docs/api_endpoints.md` and `docker-compose.yml`. Tell the team before changing them, and keep those changes in small, separate commits.
-
-### Mock data: build screens before the API is finished
-
-Every endpoint in `docs/api_endpoints.md` already answers. Routes marked `MOCK` return sample data in the **final** shape, so a screen built against them keeps working when its owner switches the route to real queries.
-
-- Mock responses carry the header `X-Mock: true`, and the browser console logs `[mock data] GET /users`.
-- Checkout's mock can show both failures: an amount over 5000 returns `402 INSUFFICIENT_BALANCE`, and `?simulate=active-order` returns `409 ACTIVE_ORDER_EXISTS`.
-- Real so far: `GET /health`, `GET /users`, `GET /users/:id`, `GET /users/:id/audit`, `GET /orders`, `GET /orders/:id`, `GET /restaurants`, `GET /restaurants/:id`, `GET /reviews/stats`, `GET /drivers/nearby`.
 
 ### Building a screen
 
@@ -291,13 +293,13 @@ Every endpoint in `docs/api_endpoints.md` already answers. Routes marked `MOCK` 
 
 The web app reloads in the browser when you save a file.
 
-### Making a route real
+### Adding or changing a route
 
-1. Open the route file in `api/src/routes/`. Each `MOCK` route has a `TODO` describing the query.
+1. Routes live in `api/src/routes/`, one file per area.
 2. Follow `restaurants.js` (PostgreSQL list) or `reviews.js` (MongoDB pipeline). Use `$1` placeholders, never string-built SQL.
 3. Use `withTransaction()` from `api/src/db/postgres.js` when several statements must succeed together (checkout).
 4. Throw `ApiError` (or let PostgreSQL errors reach `lib/errors.js`) instead of sending error responses by hand.
-5. Remove the `sendMock` call, and change the route's status to `REAL` in `docs/api_endpoints.md`.
+5. Describe the route in `docs/api_endpoints.md`.
 6. Add a test in `api/tests/`.
 
 The API restarts when you save a file.
@@ -384,7 +386,7 @@ ssd_assignment_1b/
 ├── docker/seed/                 # seed image + script (runs sql/, mongo/, data_generation/)
 ├── docs/
 │   ├── handover_note.md         # what we inherited, what we fixed
-│   ├── api_endpoints.md         # API contract (shapes, errors, REAL/MOCK status)
+│   ├── api_endpoints.md         # API contract (shapes, errors)
 │   └── design/                  # users, wireframes, visual language
 ├── sql/  mongo/  data_generation/  performance/   # from Assignment 1 (+ our fixes)
 ├── api/                         # Express API
@@ -395,8 +397,7 @@ ssd_assignment_1b/
 │   │   ├── db/                  # postgres.js (pool, withTransaction), mongo.js
 │   │   ├── lib/                 # errors.js (friendly DB errors), pagination.js
 │   │   ├── middleware/          # error handler
-│   │   ├── routes/              # one file per area
-│   │   └── mocks.js             # sample data for routes not built yet
+│   │   └── routes/              # one file per area
 │   └── tests/
 └── web/                         # React + Vite front end
     └── src/
@@ -406,7 +407,7 @@ ssd_assignment_1b/
         ├── context/             # ActorContext ("acting as" for the demo)
         ├── hooks/  lib/         # useDebouncedValue, formatting helpers
         ├── pages/               # one file per screen
-        └── styles/              # tokens.css (design tokens), base.css, components.css
+        └── styles/              # tokens.css (design tokens), base.css, components.css, screens.css
 ```
 
 ## Tech Choices
@@ -431,10 +432,15 @@ ssd_assignment_1b/
 3. The checkout total is calculated in the browser from the menu; `sp_execute_checkout` charges that amount. The procedure does not check prices against the menu.
 4. Orders move only forward: Preparing → Delivering → Delivered. There is no cancellation, because the inherited schema has no such status.
 5. Seeded wallets start at ₹0 and get one opening CREDIT (their starting balance) 30 days ago, before any order, so each customer's audit trail explains their whole balance.
-6. Dates in filters (the Wallet screen's from/to) are Indian calendar days (`Asia/Kolkata`). The database stores UTC; the app shows times in the browser's time zone.
+6. Dates in filters (the Wallet screen's from/to) are Indian calendar days (`Asia/Kolkata`). The database stores UTC; the app shows every time in India Standard Time, whatever the viewer's computer is set to.
 7. The 7-day moving average covers the days that have delivered orders in the window; days with no orders are not counted as zeros.
 8. Each review belongs to one delivered order (one review per order). Restaurants with no delivered orders are left out of the revenue ranking.
-9. _Add more as you make decisions._
+9. A **completed** order is one with status `DELIVERED`; an **active** order is `PREPARING` or `DELIVERING`. Revenue, the materialized view and the ranking count completed orders only.
+10. Drivers exist only in MongoDB (`DriverPings`); there is no drivers table in PostgreSQL. A driver's position is their newest ping.
+11. The Map counts a driver as nearby if their newest ping is from the last 10 minutes, active, and within 5 km. Pings expire after 2 hours (TTL index); the ping simulator keeps adding fresh ones.
+12. `amount_changed` in `wallet_audit_logs` is always positive; `action_type` (`DEBIT` or `CREDIT`) gives the direction. The Wallet screen shows it signed (+ / −).
+13. Amounts are limited to ₹99,999,999.99 (`DECIMAL(10,2)`), checked in the browser, the API and the database. A top-up that would take a wallet past that limit is refused.
+14. All restaurants and drivers are in one city (around Bengaluru).
 
 ## Changes to the Inherited Code
 
@@ -452,7 +458,6 @@ ssd_assignment_1b/
 | MongoDB performance evidence recaptured (issue #57) | `performance/mongo_execution_stats.json`, `performance/capture_mongo_stats.js` | The inherited file held one explain, for Workflow 4 on the original random data, and nothing for Workflow 3. The script runs the current pipelines from `mongo/02` and `mongo/03` with `explain("executionStats")` and adds a short summary of each: the driver query's first step uses `idx_driver_createdAt_ttl`, `$geoNear` uses `idx_driver_location_2dsphere`, and one restaurant's review facets use `idx_review_restaurant_created` (33 documents read instead of all 10,000). Captured on the seeded data with the ping simulator running. To recapture (same in bash and PowerShell): `docker compose cp performance/capture_mongo_stats.js mongo:/tmp/capture_mongo_stats.js`, then `docker compose exec -T mongo sh -c "mongosh --quiet bitestream --file /tmp/capture_mongo_stats.js > /tmp/mongo_execution_stats.json"`, then `docker compose cp mongo:/tmp/mongo_execution_stats.json performance/mongo_execution_stats.json` |
 | PostgreSQL query plans recaptured (issue #67) | `performance/postgres_explain_analyzes.txt`, `performance/capture_postgres_plans.sql` | The inherited file held one plan, the Workflow 2 report doing a full scan of `orders`, and nothing for the queries the app runs. The script runs `EXPLAIN (ANALYZE, BUFFERS)` on the API's own SQL for each screen, with real ids, and every read of the large tables (orders, wallet history, the summary view by restaurant) uses an index; the only full scans are of two 500-row tables (restaurants in a join, and the summary view for the ranking) and the inherited all-restaurants report (see [Performance](#performance)). To recapture (same in bash and PowerShell): `docker compose cp performance/capture_postgres_plans.sql postgres:/tmp/capture_postgres_plans.sql`, then `docker compose exec -T postgres sh -c "psql -X -q -U postgres -d bitestream -f /tmp/capture_postgres_plans.sql > /tmp/postgres_explain_analyzes.txt"`, then `docker compose cp postgres:/tmp/postgres_explain_analyzes.txt performance/postgres_explain_analyzes.txt` |
 | Demo customers with fixed ids (issue #66) | `sql/fixtures/demo_customers.sql`, `docker/seed/seed.sh`, `api/tests/demo_customers.test.js` | Most seeded customers already have an order in progress and every id changes on reseed, so the checkout outcomes were hard to show on demand. Three customers ("Demo - plenty of money", "Demo - low balance", "Demo - order in progress") are created with the real procedures, so their orders and wallet history are like any other's. `seed.sh` applies the file after seeding, on every run, which also puts them back into their demo state; `CALL sp_reset_demo_customers();` does the same by hand. |
-| _Whoever makes a fix: add it here_ | | |
 
 ## Contribution
 

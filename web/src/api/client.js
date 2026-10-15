@@ -26,8 +26,6 @@ export async function api(path, { method = 'GET', params, body } = {}) {
     throw new ApiError(0, 'NETWORK', 'Cannot reach the API. Check that it is running.');
   }
 
-  if (res.headers.get('X-Mock')) console.info(`[mock data] ${method} ${path}`);
-
   const data = await res.json().catch(() => null);
   // The dev server's proxy answers 502 (with no JSON body) when the api
   // container is stopped. The API itself never sends these without a body.
