@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { checkout, getMenu, getRestaurant, getUser, listRestaurants, topUpWallet } from '../api/endpoints.js';
 import { Button, Card, EmptyState, PageHeader, Pagination, QueryState, Stat, StatusBadge, TextField } from '../components/ui/index.js';
@@ -120,6 +120,9 @@ function MenuAndCart({ menu, restaurant, customer, onChangeRestaurant }) {
   const [topup, setTopup] = useState('');
   const [showTopup, setShowTopup] = useState(false);
   const submitting = useRef(false);
+  // When a payment problem or the top-up form appears, bring it into view
+  // (it sits under Place order, which may be near the bottom of the screen).
+  const feedback = useRef(null);
   const user = useQuery({ queryKey: ['user', customer?.id], queryFn: () => getUser(customer.id), enabled: !!customer });
   const items = menuItems(menu);
   const lines = cartLines(items, cart);
@@ -141,6 +144,10 @@ function MenuAndCart({ menu, restaurant, customer, onChangeRestaurant }) {
     onSuccess: () => { payment.reset(); setTopup(''); return refreshWallet(); },
   });
   const busy = payment.isPending || credit.isPending;
+  // The 409 link appears once the customer is reloaded, so scroll again then.
+  useEffect(() => {
+    feedback.current?.scrollIntoView?.({ block: 'nearest' });
+  }, [payment.error, showTopup, credit.status, user.dataUpdatedAt]);
   const placeOrder = async () => {
     if (submitting.current || busy || !customer || !validTotal || payment.isSuccess) return;
     submitting.current = true;
@@ -235,22 +242,27 @@ function MenuAndCart({ menu, restaurant, customer, onChangeRestaurant }) {
         <Stat label="Total" value={formatMoney(total / 100)} />
         {!!lines.length && !validTotal && <p role="alert">Choose available items with a total between ₹0.01 and ₹9,99,99,999.99.</p>}
         <Button disabled={!customer || !validTotal || busy || !user.isSuccess} onClick={placeOrder}>{payment.isPending ? 'Placing order…' : 'Place order'}</Button>
+        {/* Payment problems and their next step sit right under Place order, so
+            they're seen without scrolling past the menu. */}
+        {(payment.error || showTopup) && <div className="stack checkout-feedback" ref={feedback}>
+          {payment.error && <>
+            <p className="alert alert--error" role="alert">{payment.error.message}</p>
+            {payment.error.status === 402 && payment.error.code === 'INSUFFICIENT_BALANCE' && !showTopup && <Button variant="secondary" disabled={busy} onClick={() => setShowTopup(true)}>Top up</Button>}
+            {payment.error.status === 409 && payment.error.code === 'ACTIVE_ORDER_EXISTS' && <QueryState query={user}>{(data) => data.activeOrder
+              ? <Link to={`/browse/orders/${data.activeOrder.id}`} className="btn btn--secondary">View active order</Link>
+              : <p>No active order was found. You can try placing your order again.</p>}</QueryState>}
+          </>}
+          {showTopup && <section className="stack" aria-label="Top up wallet">
+            <h3>Top up wallet</h3>
+            <form onSubmit={addCredit} className="stack">
+              <TextField label="Top-up amount (₹)" aria-label="Top-up amount (₹)" type="text" inputMode="decimal" value={topup} disabled={busy} onChange={(event) => setTopup(event.target.value)} hint="Enter a positive amount with up to two decimal places." />
+              <Button type="submit" disabled={busy || topupPaise(topup) === null}>{credit.isPending ? 'Topping up…' : 'Confirm top up'}</Button>
+            </form>
+            {credit.error && <p role="alert" className="alert alert--error">{credit.error.message}</p>}
+            {credit.isSuccess && <div className="stack"><p role="status" className="alert alert--success">Top-up successful. Wallet balance: {formatMoney(credit.data.walletBalance)}. Press Place order when you are ready to retry.</p><AuditEntry entry={credit.data.auditEntry} /></div>}
+          </section>}
+        </div>}
       </Card>
     </div>
-    {payment.error && <div className="stack">
-      <p className="alert alert--error" role="alert">{payment.error.message}</p>
-      {payment.error.status === 402 && payment.error.code === 'INSUFFICIENT_BALANCE' && <Button variant="secondary" disabled={busy} onClick={() => setShowTopup(true)}>Top up</Button>}
-      {payment.error.status === 409 && payment.error.code === 'ACTIVE_ORDER_EXISTS' && <QueryState query={user}>{(data) => data.activeOrder
-        ? <Link to={`/browse/orders/${data.activeOrder.id}`}>View active order</Link>
-        : <p>No active order was found. You can try placing your order again.</p>}</QueryState>}
-    </div>}
-    {showTopup && <Card title="Top up wallet">
-      <form onSubmit={addCredit} className="stack">
-        <TextField label="Top-up amount (₹)" aria-label="Top-up amount (₹)" type="text" inputMode="decimal" value={topup} disabled={busy} onChange={(event) => setTopup(event.target.value)} hint="Enter a positive amount with up to two decimal places." />
-        <Button type="submit" disabled={busy || topupPaise(topup) === null}>{credit.isPending ? 'Topping up…' : 'Confirm top up'}</Button>
-      </form>
-      {credit.error && <p role="alert" className="alert alert--error">{credit.error.message}</p>}
-      {credit.isSuccess && <div className="stack"><p role="status" className="alert alert--success">Top-up successful. Wallet balance: {formatMoney(credit.data.walletBalance)}. Press Place order when you are ready to retry.</p><AuditEntry entry={credit.data.auditEntry} /></div>}
-    </Card>}
   </>;
 }
