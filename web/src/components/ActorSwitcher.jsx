@@ -22,7 +22,7 @@ export function ActorSwitcher() {
       </label>
 
       {actor.role === 'customer' && (
-        <SearchPicker key="customer" noun="customer" fetchList={listUsers} selected={actor.user} onSelect={setUser} autoSelectMatch />
+        <SearchPicker key="customer" noun="customer" fetchList={listUsers} selected={actor.user} onSelect={setUser} />
       )}
       {actor.role === 'manager' && (
         <SearchPicker key="restaurant" noun="restaurant" fetchList={listRestaurants} selected={actor.restaurant} onSelect={setRestaurant} autoSelectMatch />

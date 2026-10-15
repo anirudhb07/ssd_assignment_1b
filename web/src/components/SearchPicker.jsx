@@ -24,12 +24,14 @@ export function SearchPicker({
   const ready = !searching && !list.isPlaceholderData && list.isSuccess;
 
   // Only a user edit arms selection: refetches or manual clearing must not
-  // change the actor later. Like Map, retain a matching choice or use the first result.
+  // change the actor later. Never choose the first of multiple matches.
   useEffect(() => {
     if (list.isError) pendingSelection.current = false;
     if (!ready || !pendingSelection.current) return;
     pendingSelection.current = false;
-    const match = items.find((item) => item.id === selected?.id) ?? items[0];
+    // Only auto-select when the server confirms exactly one match.
+    // A single item on a paginated results page is not proof of uniqueness.
+    const match = list.data?.total === 1 && items.length === 1 ? items[0] : null;
     if (autoSelectMatch && search.trim()
       && match?.id && match.name && match.id !== selected?.id) {
       onSelect({ id: match.id, name: match.name });
@@ -38,10 +40,10 @@ export function SearchPicker({
 
   const firstOption = searching ? 'Loading…'
     : list.isError ? `Couldn’t load ${noun}s`
-    : items.length ? `Choose a ${noun}` : 'No matches';
+      : items.length ? `Choose a ${noun}` : 'No matches';
   const status = searching ? `Loading ${noun}s…`
     : list.isError ? `Couldn’t load ${noun}s. ${list.error.message}`
-    : !items.length ? 'No matches. Try another search.' : '';
+      : !items.length ? 'No matches. Try another search.' : '';
 
   return (
     <div className="search-picker">
