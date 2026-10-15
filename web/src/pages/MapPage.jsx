@@ -6,7 +6,7 @@ import { Circle, MapContainer, Marker, Popup, TileLayer, useMap } from 'react-le
 import { getNearbyDrivers, listRestaurants } from '../api/endpoints.js';
 import { Button, Card, PageHeader, QueryState, SelectField, Stat, TextField } from '../components/ui/index.js';
 import { useDebouncedValue } from '../hooks/useDebouncedValue.js';
-import { formatDateTime, formatDistance } from '../lib/format.js';
+import { formatDateTime, formatDistance, formatTime } from '../lib/format.js';
 
 // Custom icons using CSS tokens to ensure crisp rendering without external asset dependencies
 const restaurantIcon = L.divIcon({
@@ -222,7 +222,7 @@ export function MapPage() {
                         <strong>{d.driverId}</strong>
                         <div>Distance: {formatDistance(d.distanceMeters)}</div>
                         <div className="small muted">
-                          Last seen: {new Date(d.lastSeenAt).toLocaleTimeString()}
+                          Last seen: {formatTime(d.lastSeenAt)}
                         </div>
                       </Popup>
                     </Marker>
@@ -261,7 +261,7 @@ export function MapPage() {
                         {formatDistance(d.distanceMeters)}
                       </span>
                       <span className="muted small" style={{ minWidth: '60px', textAlign: 'right' }}>
-                        {new Date(d.lastSeenAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                        {formatTime(d.lastSeenAt)}
                       </span>
                     </div>
                   </div>
