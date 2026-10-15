@@ -1,14 +1,21 @@
 import { Router } from 'express';
 import { getDb } from '../db/mongo.js';
+import { requireId } from '../lib/checkoutInput.js';
 
 export const reviewsRouter = Router();
 
 // GET /api/reviews/stats?restaurantId=
 // REAL. Reference pattern for MongoDB. This is the Workflow 4 $facet
 // pipeline from mongo/03_workflow4_facet.js, with an optional $match first.
+// No restaurantId means all restaurants. A malformed restaurantId is a 400
+// (same as the other routes); a well-formed id that matches no reviews gives
+// zero reviews, not an error.
 reviewsRouter.get('/stats', async (req, res) => {
+  const restaurantId = req.query.restaurantId
+    ? requireId(String(req.query.restaurantId), 'Restaurant ID')
+    : null;
+
   const db = await getDb();
-  const restaurantId = req.query.restaurantId ? String(req.query.restaurantId) : null;
 
   const [result] = await db.collection('Reviews').aggregate([
     ...(restaurantId ? [{ $match: { restaurantId } }] : []),
