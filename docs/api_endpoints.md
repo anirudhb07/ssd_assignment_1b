@@ -117,9 +117,11 @@ Checkout and top-up amounts must be positive JSON numbers with at most two decim
 
 ### `GET /analytics/revenue?restaurantId=`
 `{ "restaurantId", "restaurantName", "points": [ { "date": "2026-09-12", "dailyRevenue", "movingAvg7d" } ] }`, oldest first.
+`restaurantId` is optional; without it, the top-ranked restaurant is used. `movingAvg7d` is the average of `dailyRevenue` over the days that have delivered orders in the 7 days up to and including that date (days with no orders are not counted as zeros). Dates are `DATE(created_at)`, as in `sql/06`.
+`400 BAD_REQUEST` if `restaurantId` isn't a valid ID; `404 NOT_FOUND` if the restaurant doesn't exist.
 
 ### `GET /analytics/ranking?page=&pageSize=`
-Item: `{ "rank", "restaurantId", "restaurantName", "totalRevenue" }`, best first. Ties share a rank (`DENSE_RANK`).
+Item: `{ "rank", "restaurantId", "restaurantName", "totalRevenue" }`, best first. Ties share a rank (`DENSE_RANK`). Restaurants with no delivered orders are left out. Revenue comes from `restaurant_order_summary`, so it is as fresh as the last refresh.
 
 ### `GET /analytics/summary` and `POST /analytics/summary/refresh`
 ```json
@@ -129,6 +131,7 @@ Item: `{ "rank", "restaurantId", "restaurantName", "totalRevenue" }`, best first
   "topRestaurants": [ { "restaurantId", "restaurantName", "completedOrderCount", "completedRevenue" } ]
 }
 ```
+`lastRefreshedAt` is `null` until the first refresh through `sp_refresh_restaurant_summary()` is logged (the seeder's own refresh isn't). `topRestaurants` lists the top 5 by revenue.
 `POST .../refresh` runs `CALL sp_refresh_restaurant_summary()` and returns the same shape.
 
 ### `GET /drivers/nearby?lat=&lng=&radius=5000`
