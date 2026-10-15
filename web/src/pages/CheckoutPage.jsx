@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { checkout, getMenu, getRestaurant, getUser, listRestaurants, topUpWallet } from '../api/endpoints.js';
 import { Button, Card, EmptyState, PageHeader, Pagination, QueryState, Stat, StatusBadge, TextField } from '../components/ui/index.js';
@@ -74,11 +74,19 @@ function CheckoutSession({ customer }) {
   </div>;
 }
 
+// The customer chosen in Acting as no longer exists (e.g. after a full
+// reseed): Try again can't help, so point to the switcher instead.
+const missingCustomer = (query) => query.isError && query.error?.status === 404;
+function MissingCustomer() {
+  return <p className="alert alert--error" role="alert">This customer no longer exists. Choose another customer in Acting as.</p>;
+}
+
 // Beside the restaurant list: what the customer has to spend.
 function WalletPanel({ customer }) {
   const user = useQuery({ queryKey: ['user', customer?.id], queryFn: () => getUser(customer.id), enabled: !!customer });
   return <Card title="Your wallet">
     {!customer ? <p className="muted small">No customer chosen.</p>
+      : missingCustomer(user) ? <MissingCustomer />
       : <QueryState query={user} loadingLabel="Loading wallet…">{(data) => <>
         <Stat label="Available balance" value={formatMoney(data.walletBalance)} hint={data.name} />
         {data.activeOrder && <p className="alert alert--info">This customer already has an order in progress, so a new order will be refused until it is delivered.</p>}
@@ -120,6 +128,9 @@ function MenuAndCart({ menu, restaurant, customer, onChangeRestaurant }) {
   const [topup, setTopup] = useState('');
   const [showTopup, setShowTopup] = useState(false);
   const submitting = useRef(false);
+  // When a payment problem or the top-up form appears, bring it into view
+  // (it sits under Place order, which may be near the bottom of the screen).
+  const feedback = useRef(null);
   const user = useQuery({ queryKey: ['user', customer?.id], queryFn: () => getUser(customer.id), enabled: !!customer });
   const items = menuItems(menu);
   const lines = cartLines(items, cart);
@@ -141,6 +152,17 @@ function MenuAndCart({ menu, restaurant, customer, onChangeRestaurant }) {
     onSuccess: () => { payment.reset(); setTopup(''); return refreshWallet(); },
   });
   const busy = payment.isPending || credit.isPending;
+  // The customer's order in progress, if any (refetched after a failed payment).
+  const activeOrder = user.data?.activeOrder ?? null;
+  const insufficient = payment.error?.status === 402 && payment.error.code === 'INSUFFICIENT_BALANCE';
+  // The cart costs more than the wallet holds: say so before paying (the
+  // database would refuse it with 402), with Top up right here.
+  const shortBy = user.data && validTotal ? total - Math.round(user.data.walletBalance * 100) : 0;
+  const overBudget = shortBy > 0 && !activeOrder && !payment.error && !payment.isPending;
+  // The 409 link appears once the customer is reloaded, so scroll again then.
+  useEffect(() => {
+    feedback.current?.scrollIntoView?.({ block: 'nearest' });
+  }, [payment.error, showTopup, credit.status, user.dataUpdatedAt]);
   const placeOrder = async () => {
     if (submitting.current || busy || !customer || !validTotal || payment.isSuccess) return;
     submitting.current = true;
@@ -190,7 +212,7 @@ function MenuAndCart({ menu, restaurant, customer, onChangeRestaurant }) {
   return <>
     <Button variant="secondary" disabled={busy} onClick={onChangeRestaurant}>Change restaurant</Button>
     <p className="muted small">Changing restaurant clears your cart. Add-ons apply to every unit of that item.</p>
-    {customer && <QueryState query={user}>{(data) => <div className="checkout-stats">
+    {missingCustomer(user) ? <MissingCustomer /> : customer && <QueryState query={user}>{(data) => <div className="checkout-stats">
       <Card><Stat label={`Wallet balance · ${data.name}`} value={formatMoney(data.walletBalance)} /></Card>
       <Card><Stat label="Order total" value={formatMoney(total / 100)} /></Card>
       <Card><Stat label="Estimated balance after" value={formatMoney((Math.round(data.walletBalance * 100) - total) / 100)} hint="The server confirms your balance when you place the order." /></Card>
@@ -235,22 +257,45 @@ function MenuAndCart({ menu, restaurant, customer, onChangeRestaurant }) {
         <Stat label="Total" value={formatMoney(total / 100)} />
         {!!lines.length && !validTotal && <p role="alert">Choose available items with a total between ₹0.01 and ₹9,99,99,999.99.</p>}
         <Button disabled={!customer || !validTotal || busy || !user.isSuccess} onClick={placeOrder}>{payment.isPending ? 'Placing order…' : 'Place order'}</Button>
+        {/* Payment problems and their next step sit right under Place order, so
+            they're seen without scrolling past the menu. */}
+        {(payment.error || showTopup || activeOrder || overBudget) && <div className="stack checkout-feedback" ref={feedback}>
+          {overBudget && <>
+            <p className="alert alert--info" role="status">This order costs {formatMoney(shortBy / 100)} more than the wallet balance ({formatMoney(user.data.walletBalance)}). Top up first, or the payment will be refused.</p>
+            {!showTopup && <Button variant="secondary" disabled={busy} onClick={() => setShowTopup(true)}>Top up</Button>}
+          </>}
+          {/* Say so before paying: the database will refuse a second active
+              order (partial unique index), and a top-up wouldn't change that. */}
+          {activeOrder && !payment.error && !payment.isPending && <>
+            <p className="alert alert--info" role="status">This customer already has an order in progress (<StatusBadge status={activeOrder.status} />). A new order will be refused until it is delivered.</p>
+            <Link to={`/browse/orders/${activeOrder.id}`} className="btn btn--secondary">View active order</Link>
+          </>}
+          {payment.error && <>
+            <p className="alert alert--error" role="alert">
+              {/* With an order in progress a top-up doesn't help, so drop that advice. */}
+              {insufficient && activeOrder ? payment.error.message.replace(/\s*Top up the wallet and try again\.?\s*$/, '') : payment.error.message}
+            </p>
+            {payment.error.code === 'NETWORK' && <p className="muted small">The order may or may not have gone through. Check the wallet and orders before trying again.</p>}
+            {insufficient && activeOrder && <>
+              <p className="small">Topping up won’t help yet: this customer also has an order in progress, and it must be delivered before they can order again.</p>
+              <Link to={`/browse/orders/${activeOrder.id}`} className="btn btn--secondary">View active order</Link>
+            </>}
+            {insufficient && !activeOrder && !showTopup && <Button variant="secondary" disabled={busy} onClick={() => setShowTopup(true)}>Top up</Button>}
+            {payment.error.status === 409 && payment.error.code === 'ACTIVE_ORDER_EXISTS' && <QueryState query={user}>{(data) => data.activeOrder
+              ? <Link to={`/browse/orders/${data.activeOrder.id}`} className="btn btn--secondary">View active order</Link>
+              : <p>No active order was found. You can try placing your order again.</p>}</QueryState>}
+          </>}
+          {showTopup && <section className="stack" aria-label="Top up wallet">
+            <h3>Top up wallet</h3>
+            <form onSubmit={addCredit} className="stack">
+              <TextField label="Top-up amount (₹)" aria-label="Top-up amount (₹)" type="text" inputMode="decimal" value={topup} disabled={busy} onChange={(event) => setTopup(event.target.value)} hint="Enter a positive amount with up to two decimal places." />
+              <Button type="submit" disabled={busy || topupPaise(topup) === null}>{credit.isPending ? 'Topping up…' : 'Confirm top up'}</Button>
+            </form>
+            {credit.error && <p role="alert" className="alert alert--error">{credit.error.message}</p>}
+            {credit.isSuccess && <div className="stack"><p role="status" className="alert alert--success">Top-up successful. Wallet balance: {formatMoney(credit.data.walletBalance)}. Press Place order when you are ready to retry.</p><AuditEntry entry={credit.data.auditEntry} /></div>}
+          </section>}
+        </div>}
       </Card>
     </div>
-    {payment.error && <div className="stack">
-      <p className="alert alert--error" role="alert">{payment.error.message}</p>
-      {payment.error.status === 402 && payment.error.code === 'INSUFFICIENT_BALANCE' && <Button variant="secondary" disabled={busy} onClick={() => setShowTopup(true)}>Top up</Button>}
-      {payment.error.status === 409 && payment.error.code === 'ACTIVE_ORDER_EXISTS' && <QueryState query={user}>{(data) => data.activeOrder
-        ? <Link to={`/browse/orders/${data.activeOrder.id}`}>View active order</Link>
-        : <p>No active order was found. You can try placing your order again.</p>}</QueryState>}
-    </div>}
-    {showTopup && <Card title="Top up wallet">
-      <form onSubmit={addCredit} className="stack">
-        <TextField label="Top-up amount (₹)" aria-label="Top-up amount (₹)" type="text" inputMode="decimal" value={topup} disabled={busy} onChange={(event) => setTopup(event.target.value)} hint="Enter a positive amount with up to two decimal places." />
-        <Button type="submit" disabled={busy || topupPaise(topup) === null}>{credit.isPending ? 'Topping up…' : 'Confirm top up'}</Button>
-      </form>
-      {credit.error && <p role="alert" className="alert alert--error">{credit.error.message}</p>}
-      {credit.isSuccess && <div className="stack"><p role="status" className="alert alert--success">Top-up successful. Wallet balance: {formatMoney(credit.data.walletBalance)}. Press Place order when you are ready to retry.</p><AuditEntry entry={credit.data.auditEntry} /></div>}
-    </Card>}
   </>;
 }

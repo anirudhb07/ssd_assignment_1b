@@ -9,6 +9,7 @@ import {
   Button, Card, DataTable, ErrorState, PageHeader, Pagination, QueryState, Stat,
 } from '../components/ui/index.js';
 import { useListParams } from '../hooks/useListParams.js';
+import { usePastTheEnd } from '../hooks/usePastTheEnd.js';
 import { formatDateTime, formatMoney } from '../lib/format.js';
 
 // Workflow 2 + materialized view. Owner: Member C.
@@ -63,6 +64,8 @@ export function AnalyticsPage() {
     queryFn: () => getRanking({ page, pageSize: RANKING_PAGE_SIZE }),
     placeholderData: keepPreviousData,
   });
+
+  const rankingPastTheEnd = usePastTheEnd(ranking.data, page, update);
 
   const refresh = useMutation({
     mutationFn: refreshSummary,
@@ -126,6 +129,13 @@ export function AnalyticsPage() {
               </Card>
               <Card>
                 <Stat
+                  label="Average order value"
+                  value={data.totals.completedOrders ? formatMoney(Math.round((data.totals.completedRevenue / data.totals.completedOrders) * 100) / 100) : '—'}
+                  hint="Completed revenue ÷ completed orders"
+                />
+              </Card>
+              <Card>
+                <Stat
                   label="Summary last refreshed"
                   value={data.lastRefreshedAt ? formatDateTime(data.lastRefreshedAt) : 'Never'}
                   hint={data.lastRefreshedAt ? undefined : 'Press Refresh to build the summary.'}
@@ -151,7 +161,7 @@ export function AnalyticsPage() {
           <Card title="Ranking by revenue">
             <QueryState
               query={ranking}
-              isEmpty={(d) => d.items.length === 0}
+              isEmpty={(d) => d.items.length === 0 && !rankingPastTheEnd}
               emptyTitle="No ranking yet"
               emptyMessage="Press Refresh to build the summary."
               loadingLabel="Loading ranking…"

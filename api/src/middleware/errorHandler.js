@@ -7,6 +7,11 @@ export function notFoundRoute(req, res) {
 // Express 5 forwards errors thrown in async handlers here automatically.
 // eslint-disable-next-line no-unused-vars
 export function errorHandler(err, req, res, next) {
+  // A request body that isn't valid JSON is the caller's mistake, not a server error.
+  if (err?.type === 'entity.parse.failed') {
+    res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'The request body is not valid JSON.' } });
+    return;
+  }
   const apiError = err instanceof ApiError ? err : fromPgError(err);
   if (apiError) {
     res.status(apiError.status).json({ error: { code: apiError.code, message: apiError.message } });

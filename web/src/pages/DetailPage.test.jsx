@@ -101,7 +101,7 @@ describe('Customer page', () => {
     expect(await screen.findByRole('heading', { name: 'User-356958d2' })).toBeInTheDocument();
     expect(statValue('Wallet balance')).toHaveTextContent('₹33,683');
     await waitFor(() => expect(statValue('Orders')).toHaveTextContent('23'));
-    expect(listOrders).toHaveBeenCalledWith({ userId: 'u1', pageSize: 1 });
+    expect(listOrders).toHaveBeenCalledWith({ userId: 'u1', pageSize: 5 });
     expect(statValue('Order in progress')).toHaveTextContent('Preparing');
     const card = within(screen.getByRole('heading', { name: 'Order in progress' }).closest('section'));
     expect(card.getByRole('link', { name: 'Restaurant-143' })).toHaveAttribute('href', '/browse/restaurants/r9');
@@ -122,7 +122,7 @@ describe('Customer page', () => {
     expect(await screen.findByText('Advance status moves it to Delivering.')).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Advance status' }));
-    expect(advanceOrder).toHaveBeenCalledWith('o1');
+    expect(advanceOrder).toHaveBeenCalledWith('o1', 'PREPARING');
     expect(await screen.findByRole('status')).toHaveTextContent('Order moved to Delivering.');
     await waitFor(() => expect(statValue('Order in progress')).toHaveTextContent('Delivering'));
     expect(screen.getByText('Advance status moves it to Delivered.')).toBeInTheDocument();

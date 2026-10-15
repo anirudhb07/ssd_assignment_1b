@@ -481,14 +481,12 @@ ssd_assignment_1b/
 
 ## Contribution
 
-Names and roll numbers are in the [Team](#team) table. Before submitting, describe what each member actually did, design and code, so the grader can see the split.
-
-| Member | Contribution |
-| --- | --- |
-| A | Workflow 1 (Checkout & Order Lifecycle): Designed Checkout wireframes (`des-2`). Implemented `sp_advance_order_status` and `sp_wallet_topup` in `sql/07`, API routes `POST /checkout`, `POST /orders/:id/advance`, `POST /users/:id/topup`, top-up modal and `CheckoutPage` UI, and automated checkout test suite. |
-| B | Browse & Wallet: Designed Browse & Wallet wireframes (`des-1`). Fixed audit ordering in `sql/08` with `seq` sequence and `clock_timestamp()`, added `idx_orders_created_at` in `sql/08`, API routes for `/users`, `/orders`, and `/users/:id/audit`, built `BrowsePage`, `WalletPage`, `DetailPage`, and `ActorSwitcher`. |
-| C | Workflows 2 & 4 (Analytics & Reviews): Designed Analytics & Reviews wireframes (`des-3`). Linked Mongo seed data to Postgres in `mongo_seeder.py`, created `sql/09` with `fn_restaurant_revenue_trend` (`RANGE '6 days'`), `fn_restaurant_revenue_ranking`, and `restaurant_summary_refresh_log`, API routes for `/analytics/*`, `/reviews/stats`, and `/restaurants/:id/menu`, built `AnalyticsPage` and `ReviewsPage`. |
-| D | Workflow 3 (Live Map / Dispatcher) & Release: Designed Map wireframes at laptop and phone widths (`des-4`). Built driver ping simulator (`ping_simulator.py`) maintaining ~90% active equilibrium, rewrote `$geoNear` proximity aggregation pipeline in `mongo/02` and `GET /api/drivers/nearby` with latest-ping deduplication, built `MapPage` with Leaflet 5 km bounds fitting and 5s polling, added idempotent seeders and `idx_reviews_rating` (Issue #11), wrote `docs/handover_note.md`, README documentation sections, and release packaging. |
+| Member | Role | Contributions |
+| --- | --- | --- |
+| Nithin (2026201038) | Checkout (Workflow 1) | Designed the Checkout wireframes. Added the order-status and wallet top-up procedures, built the checkout APIs and the Checkout and order screens, and wrote the Checkout tests and demo checklist. |
+| Anirudh (2026201058) | Browse & Wallet | Designed the shared wireframe kit and the Browse and Wallet wireframes. Set up Docker and the project structure, built the Browse and Wallet APIs and screens, and added the demo customers and performance evidence. |
+| Sanjana (2026204012) | Analytics & Reviews (Workflows 2, 4) | Designed the Analytics and Reviews wireframes. Linked the Mongo data to PostgreSQL, added the revenue trend and ranking SQL, and built the Analytics and Reviews APIs and screens with tests. |
+| Dhavla Ravi (2026204004) | Map (Workflow 3) & release | Designed the Map wireframes. Added the driver ping simulator, fixed the `$geoNear` pipeline and other inherited database issues, and built the nearby-drivers API and the live Map screen with tests. Finalised the handover note and README, and recorded the demo video and prepared the submission. |
 
 ---
 

@@ -64,6 +64,16 @@ describe('Restaurants tab', () => {
   });
 });
 
+describe('a page past the end', () => {
+  it('goes to the last page instead of saying nothing was found', async () => {
+    listUsers.mockImplementation(async ({ page: p }) => (p > 3 ? { items: [], page: p, pageSize: 20, total: 45 } : { items: [user], page: p, pageSize: 20, total: 45 }));
+    renderAt('/browse?tab=users&page=99');
+    expect(await screen.findByText('User-1a2b3c4d')).toBeInTheDocument();
+    expect(listUsers).toHaveBeenLastCalledWith(expect.objectContaining({ page: 3 }));
+    expect(screen.queryByText('No customers found')).not.toBeInTheDocument();
+  });
+});
+
 describe('Users tab', () => {
   it('lists customers with their wallet balance', async () => {
     renderAt('/browse?tab=users');

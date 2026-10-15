@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { ORDER_SELECT, ORDER_STATUSES } from '../db/orders.js';
 import { query, withTransaction } from '../db/postgres.js';
 import { requireId } from '../lib/checkoutInput.js';
-import { badRequest, notFound } from '../lib/errors.js';
+import { ApiError, badRequest, notFound } from '../lib/errors.js';
 import { paged, parsePagination } from '../lib/pagination.js';
 
 export const ordersRouter = Router();
@@ -55,7 +55,20 @@ ordersRouter.get('/:id', async (req, res) => {
 // POST /api/orders/:id/advance — REAL.
 ordersRouter.post('/:id/advance', async (req, res) => {
   const orderId = requireId(req.params.id, 'Order ID');
+  // Optional { from }: the status the caller's page showed. If the order has
+  // moved on since (another tab or person advanced it), refuse instead of
+  // skipping a step. The row lock makes the check and the advance atomic.
+  const from = req.body?.from;
   const order = await withTransaction(async (client) => {
+    if (from !== undefined) {
+      const current = await client.query('SELECT status FROM orders WHERE id = $1 FOR UPDATE', [orderId]);
+      if (current.rowCount === 0) throw notFound('That order');
+      const status = current.rows[0].status;
+      if (status !== from) {
+        const label = { PREPARING: 'Preparing', DELIVERING: 'Delivering', DELIVERED: 'Delivered' }[status] ?? status;
+        throw new ApiError(409, 'STALE_ORDER', `This order is already ${label}: the page was out of date and has been refreshed.`);
+      }
+    }
     await client.query('CALL sp_advance_order_status($1)', [orderId]);
     const result = await client.query(`${ORDER_SELECT} WHERE o.id = $1`, [orderId]);
     return result.rows[0];

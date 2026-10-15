@@ -8,7 +8,7 @@ The contract between `web/` and `api/`. Agree changes here first, then change th
 
 ## Conventions
 
-**Lists** accept `?page=` (default 1) and `?pageSize=` (default 20, max 100) and return:
+**Lists** accept `?page=` (default 1) and `?pageSize=` (default 20, max 100) and return (a `search` matches names literally, including `%` and `_`):
 
 ```json
 { "items": [ ... ], "page": 1, "pageSize": 20, "total": 120000 }
@@ -70,6 +70,7 @@ Item: `{ "id", "name", "walletBalance" }`
 `from` and `to` are dates (`2026-10-01`), both optional and both included (`to=2026-10-12` covers that whole day). They are Indian calendar days (`Asia/Kolkata`), the same days the app shows. Newest first (`changed_at`, then `seq`, both descending).
 Item: `{ "id", "changedAt", "actionType": "DEBIT" | "CREDIT", "amountChanged", "balanceAfter" }`
 `400 BAD_REQUEST` if a date isn't a real `YYYY-MM-DD` date or `from` is after `to`; `404` if the customer doesn't exist; an empty list if the range has no entries.
+The response also has `totalCredits` and `totalDebits`: the sums over every row that matches the dates, not just this page.
 
 ### `POST /users/:id/topup`
 Body: `{ "amount": 1000 }`
@@ -97,6 +98,7 @@ Order.
 
 ### `POST /orders/:id/advance`
 Moves `PREPARING → DELIVERING → DELIVERED`. Returns the updated Order. `409 INVALID_TRANSITION` if it is already `DELIVERED`.
+Optional body `{ "from": "PREPARING" | "DELIVERING" }`: the status the caller's page shows. If the order has moved on since, the answer is `409 STALE_ORDER` and nothing changes (the screens send it, so an out-of-date page can't skip a step).
 
 ### `POST /checkout`
 Body: `{ "userId", "restaurantId", "amount", "items"?: [ { "name", "price", "quantity", "addOns"?: [ ... ] } ] }`
@@ -135,7 +137,7 @@ Item: `{ "rank", "restaurantId", "restaurantName", "totalRevenue" }`, best first
 `POST .../refresh` runs `CALL sp_refresh_restaurant_summary()` and returns the same shape.
 
 ### `GET /drivers/nearby?lat=&lng=&radius=5000`
-`lat`, `lng` required. `radius` in metres, default 5000.
+`lat`, `lng` required. `radius` in metres, default 5000, at most 50000 (400 otherwise).
 `{ "origin": { "lat", "lng" }, "radiusMeters", "drivers": [ { "driverId", "lat", "lng", "distanceMeters", "lastSeenAt" } ] }`, nearest first, one entry per driver.
 
 ### `GET /reviews/stats?restaurantId=`

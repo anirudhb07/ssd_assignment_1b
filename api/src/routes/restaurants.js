@@ -16,7 +16,8 @@ restaurantsRouter.get('/', async (req, res) => {
   // Always use $1, $2… placeholders. Never build SQL by pasting in user input.
   const where = search ? 'WHERE name ILIKE $1' : '';
   const listWhere = search ? 'WHERE r.name ILIKE $1' : '';
-  const params = search ? [`%${search}%`] : [];
+  // Escape % _ \\ so the text is matched literally (ILIKE's default escape is \\).
+  const params = search ? [`%${search.replace(/[\\%_]/g, '\\$&')}%`] : [];
 
   // Totals come from the materialized view (one indexed lookup per row), as
   // on the restaurant page, so Browse can show them without counting orders.

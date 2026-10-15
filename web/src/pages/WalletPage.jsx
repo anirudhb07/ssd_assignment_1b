@@ -66,7 +66,9 @@ export function WalletPage() {
       </div>
 
       {userId ? (
-        <QueryState query={user} loadingLabel="Loading customer…">
+        user.isError && user.error?.status === 404 ? (
+          <div className="alert alert--error" role="alert">That customer no longer exists. Choose another customer above or in Acting as.</div>
+        ) : <QueryState query={user} loadingLabel="Loading customer…">
           {(customer) => <CustomerWallet customer={customer} from={from} to={to} page={page} update={update} />}
         </QueryState>
       ) : (
@@ -123,7 +125,9 @@ function CustomerWallet({ customer, from, to, page, update }) {
         <Card><Stat label="Current balance" value={formatMoney(customer.walletBalance)} hint={customer.name} /></Card>
         <Card>
           <Stat label={filtered ? 'Entries in these dates' : 'Entries'} value={entries}
-            hint={filtered ? 'Across the chosen dates' : 'Since the wallet was opened'} />
+            hint={audit.data && !dateProblem
+              ? `+${formatMoney(audit.data.totalCredits)} credited · −${formatMoney(audit.data.totalDebits)} debited`
+              : filtered ? 'Across the chosen dates' : 'Since the wallet was opened'} />
         </Card>
         <Card><Stat label="Last change" value={lastChange} hint="All times are India Standard Time" /></Card>
       </div>

@@ -303,5 +303,55 @@ describe('Checkout', () => {
     expect(screen.queryByText('audit-debit')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Place order' })).toBeDisabled();
   });
+  // Payment problems and their next step appear in the cart right under Place
+  // order, not below the whole menu.
+  it('shows payment problems and their next step right under Place order', async () => {
+    const after = (a, b) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+    checkout.mockRejectedValueOnce(new ApiError(402, 'INSUFFICIENT_BALANCE', 'Not enough funds. Please top up.'));
+    setup(); await choose(); await add(); await submit();
+    const alert = await cart().findByRole('alert');
+    expect(alert).toHaveTextContent('Not enough funds. Please top up.');
+    expect(after(cart().getByRole('button', { name: 'Place order' }), alert)).toBe(true);
+    await userEvent.click(cart().getByRole('button', { name: 'Top up' }));
+    expect(cart().getByLabelText('Top-up amount (₹)')).toBeInTheDocument();
+
+    checkout.mockRejectedValueOnce(new ApiError(409, 'ACTIVE_ORDER_EXISTS', 'Finish your current order first.'));
+    getUser.mockResolvedValue({ id: 'u1', name: 'Customer One', walletBalance: 100, activeOrder: { id: 'active-42' } });
+    await submit();
+    expect(await cart().findByRole('link', { name: 'View active order' })).toHaveAttribute('href', '/browse/orders/active-42');
+  });
+  // A customer with an order in progress can't order again whatever their
+  // balance, so don't send them to Top up first.
+  it('warns about an order in progress before paying, and does not offer Top up for it', async () => {
+    getUser.mockResolvedValue({ id: 'u1', name: 'Customer One', walletBalance: 0.05, activeOrder: { id: 'active-42', status: 'PREPARING' } });
+    setup(); await choose(); await add();
+    expect(await cart().findByText(/already has an order in progress/)).toBeInTheDocument();
+    expect(cart().getByRole('link', { name: 'View active order' })).toHaveAttribute('href', '/browse/orders/active-42');
+    expect(cart().getByRole('button', { name: 'Place order' })).toBeEnabled(); // the database still decides
+
+    checkout.mockRejectedValueOnce(new ApiError(402, 'INSUFFICIENT_BALANCE', 'Not enough money in the wallet. Top up the wallet and try again.'));
+    await submit();
+    const alert = await cart().findByRole('alert');
+    expect(alert).toHaveTextContent('Not enough money in the wallet.');
+    expect(alert).not.toHaveTextContent('Top up the wallet');
+    expect(cart().getByText(/Topping up won’t help yet/)).toBeInTheDocument();
+    expect(cart().queryByRole('button', { name: 'Top up' })).not.toBeInTheDocument();
+    expect(cart().getAllByRole('link', { name: 'View active order' })).toHaveLength(1);
+  });
+  it('warns before paying when the cart costs more than the wallet, with Top up right there', async () => {
+    getUser.mockResolvedValue({ id: 'u1', name: 'Customer One', walletBalance: 0.15, activeOrder: null });
+    setup(); await choose(); await add('Toast'); // ₹0.20 against ₹0.15
+    expect(await cart().findByText(/costs ₹0.05 more than the wallet balance/)).toBeInTheDocument();
+    expect(cart().getByRole('button', { name: 'Place order' })).toBeEnabled(); // the database still decides
+    await userEvent.click(cart().getByRole('button', { name: 'Top up' }));
+    expect(cart().getByLabelText('Top-up amount (₹)')).toBeInTheDocument();
+  });
+
+  it('says the chosen customer no longer exists instead of offering Try again', async () => {
+    getUser.mockRejectedValue(new ApiError(404, 'NOT_FOUND', 'That customer was not found.'));
+    setup();
+    expect(await screen.findByText(/This customer no longer exists/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+  });
 });
 
