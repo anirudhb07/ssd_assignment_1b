@@ -12,7 +12,7 @@ const mockMenu = { restaurantId: 'r1', restaurantName: 'Restaurant-166', categor
   { name: 'Main Course', items: [{ name: 'Butter Chicken', price: 400, available: true, customizationAddOns: [{ name: 'Extra Spicy', price: 10 }, { name: 'Extra Naan', price: 50 }] }] },
 ] };
 import { ApiError } from '../api/client.js';
-import { checkout, getMenu, getOrder, getUser, listRestaurants, topUpWallet } from '../api/endpoints.js';
+import { checkout, getMenu, getOrder, getRestaurant, getUser, listRestaurants, topUpWallet } from '../api/endpoints.js';
 import { ActorProvider, useActor } from '../context/ActorContext.jsx';
 import { CheckoutPage } from './CheckoutPage.jsx';
 import { DetailPage } from './DetailPage.jsx';
@@ -32,11 +32,11 @@ function SwitchCustomer() {
   const { setUser } = useActor();
   return <button onClick={() => setUser({ id: 'u2', name: 'Second customer' })}>Switch customer</button>;
 }
-function setup(customer = true) {
+function setup(customer = true, url = '/checkout') {
   localStorage.setItem('bitestream.actor', JSON.stringify({ role: 'customer', user: customer ? { id: 'u1', name: 'Customer One' } : null }));
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   const invalidate = vi.spyOn(client, 'invalidateQueries');
-  render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/checkout']}><ActorProvider><SwitchCustomer /><Routes>
+  render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[url]}><ActorProvider><SwitchCustomer /><Routes>
     <Route path="/checkout" element={<CheckoutPage />} />
     <Route path="/browse/:entity/:id" element={<DetailPage />} />
   </Routes></ActorProvider></MemoryRouter></QueryClientProvider>);
@@ -61,12 +61,24 @@ describe('Checkout', () => {
     listRestaurants.mockResolvedValue({ items: restaurants, page: 1, pageSize: 20, total: 40 });
     setup();
     expect(await screen.findByText('Cafe One')).toBeInTheDocument();
-    expect(screen.getByText('Location: 13.0484, 77.7183')).toBeInTheDocument();
+    expect(screen.queryByText(/Location:|13\.0484/)).not.toBeInTheDocument(); // no raw coordinates (#54)
+    expect(await screen.findByText('₹100')).toBeInTheDocument(); // the wallet beside the list
     expect(listRestaurants).toHaveBeenCalledWith({ page: 1, pageSize: 20, search: '' });
     await userEvent.click(screen.getByRole('button', { name: 'Next' }));
     await waitFor(() => expect(listRestaurants).toHaveBeenLastCalledWith({ page: 2, pageSize: 20, search: '' }));
     await userEvent.type(screen.getByLabelText('Search restaurants'), 'Cafe');
     await waitFor(() => expect(listRestaurants).toHaveBeenLastCalledWith({ page: 1, pageSize: 20, search: 'Cafe' }));
+  });
+
+  it('opens the menu straight away from a link with a restaurant, and can go back to the list', async () => {
+    getRestaurant.mockResolvedValue({ ...restaurants[1], summary: { completedOrderCount: 0, completedRevenue: 0 } });
+    setup(true, '/checkout?restaurantId=r2');
+    expect(await screen.findByRole('heading', { level: 2, name: 'Cafe Two' })).toBeInTheDocument();
+    expect(getRestaurant).toHaveBeenCalledWith('r2');
+    expect(getMenu).toHaveBeenCalledWith('r2');
+    await add(); // the menu has loaded
+    await userEvent.click(screen.getByRole('button', { name: 'Change restaurant' }));
+    expect(await screen.findByRole('button', { name: 'Choose Cafe One' })).toBeInTheDocument();
   });
 
   it('loads the selected menu and supports the existing production mock shape', async () => {
@@ -75,7 +87,7 @@ describe('Checkout', () => {
     expect(await screen.findByText('Paneer Tikka')).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 2, name: 'Cafe One' })).toBeInTheDocument();
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
-    expect(screen.getByText('Location: 13.0484, 77.7183')).toBeInTheDocument();
+    expect(screen.queryByText(/Location:/)).not.toBeInTheDocument();
     expect(getMenu).toHaveBeenCalledWith('r1');
     expect(screen.getByRole('button', { name: 'Add Veg Spring Roll' })).toBeDisabled();
     await add('Paneer Tikka');

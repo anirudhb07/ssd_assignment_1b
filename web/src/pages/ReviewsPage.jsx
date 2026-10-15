@@ -1,5 +1,6 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
+import { Link } from 'react-router';
 import {
   Bar, BarChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
@@ -7,7 +8,7 @@ import { getMenu, getReviewStats, listRestaurants } from '../api/endpoints.js';
 import { SearchPicker } from '../components/SearchPicker.jsx';
 import { Card, EmptyState, PageHeader, QueryState, Stat } from '../components/ui/index.js';
 import { useListParams } from '../hooks/useListParams.js';
-import { formatMoney } from '../lib/format.js';
+import { formatDateTime, formatMoney } from '../lib/format.js';
 
 // Workflow 4 + Menus catalog. Owner: Member C.
 //
@@ -56,7 +57,13 @@ export function ReviewsPage() {
 
   return (
     <>
-      <PageHeader title="Reviews" description="What customers say, and what’s on the menu." />
+      <PageHeader
+        title="Reviews"
+        description="What customers say, and what’s on the menu."
+        actions={restaurantId && !idRejected && (
+          <Link className="btn btn--primary" to={`/checkout?restaurantId=${restaurantId}`}>Place an order</Link>
+        )}
+      />
 
       <div className="stack">
         <div className="row" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
@@ -93,6 +100,7 @@ export function ReviewsPage() {
 function StatsSection({ data }) {
   const distribution = data.ratingDistribution.map((d) => ({ label: `${d.rating}★`, count: d.count }));
   const tags = data.topTags.map((t) => ({ tag: prettyTag(t.tag), count: t.count }));
+  const top = tags.reduce((best, t) => (!best || t.count > best.count ? t : best), null);
 
   return (
     <>
@@ -106,6 +114,13 @@ function StatsSection({ data }) {
         </Card>
         <Card>
           <Stat label="Reviews" value={data.totalReviews.toLocaleString('en-IN')} />
+        </Card>
+        <Card>
+          <Stat
+            label="Most mentioned"
+            value={top?.tag ?? '—'}
+            hint={top ? `${top.count.toLocaleString('en-IN')} reviews mention it` : 'No review has a tag.'}
+          />
         </Card>
       </div>
 
@@ -177,28 +192,56 @@ function MenuSection({ restaurantId, menu }) {
         emptyMessage="This restaurant has no menu."
         loadingLabel="Loading menu…"
       >
-        {(data) => {
-          const itemCount = data.categories.reduce((sum, c) => sum + c.items.length, 0);
-          return (
-            <div className="stack">
-              <p className="muted small">
-                {data.restaurantName}: {itemCount} {itemCount === 1 ? 'item' : 'items'} in {data.categories.length}{' '}
-                {data.categories.length === 1 ? 'category' : 'categories'}.
-              </p>
-              <div style={{ ...grid(300), alignItems: 'start' }}>
-                {data.categories.map((category) => (
-                  <Card key={category.name} title={category.name}>
-                    <div className="stack">
-                      {category.items.map((item) => <MenuItem key={item.name} item={item} />)}
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            </div>
-          );
-        }}
+        {(data) => <MenuCategories key={restaurantId} data={data} />}
       </QueryState>
     </Card>
+  );
+}
+
+// The menu, with category chips and an "Available only" filter.
+function MenuCategories({ data }) {
+  const [category, setCategory] = useState('');
+  const [availableOnly, setAvailableOnly] = useState(false);
+  const itemCount = data.categories.reduce((sum, c) => sum + c.items.length, 0);
+  const shown = data.categories
+    .filter((c) => !category || c.name === category)
+    .map((c) => ({ ...c, items: availableOnly ? c.items.filter((item) => item.available) : c.items }))
+    .filter((c) => c.items.length > 0);
+
+  return (
+    <div className="stack">
+      <p className="muted small">
+        {data.restaurantName}: {itemCount} {itemCount === 1 ? 'item' : 'items'} in {data.categories.length}{' '}
+        {data.categories.length === 1 ? 'category' : 'categories'}.
+        {data.updatedAt && ` Menu updated ${formatDateTime(data.updatedAt)}.`} Prices in ₹.
+      </p>
+      <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
+        <div className="chips" role="group" aria-label="Menu category">
+          {[{ name: '' }, ...data.categories].map((c) => (
+            <button key={c.name || 'all'} type="button" aria-pressed={category === c.name} onClick={() => setCategory(c.name)}>
+              {c.name || 'All items'}
+            </button>
+          ))}
+        </div>
+        <label className="row small" style={{ gap: 'var(--space-2)' }}>
+          <input type="checkbox" checked={availableOnly} onChange={(e) => setAvailableOnly(e.target.checked)} />
+          Available only
+        </label>
+      </div>
+      {shown.length === 0 ? (
+        <EmptyState title="Nothing to show" message="No available items in this category." />
+      ) : (
+        <div style={{ ...grid(300), alignItems: 'start' }}>
+          {shown.map((c) => (
+            <Card key={c.name} title={c.name}>
+              <div className="stack">
+                {c.items.map((item) => <MenuItem key={item.name} item={item} />)}
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

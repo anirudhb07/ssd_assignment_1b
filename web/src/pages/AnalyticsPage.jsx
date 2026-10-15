@@ -1,4 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import {
   CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
@@ -40,6 +41,9 @@ const axisMoney = (value) => (value >= 1000 ? `₹${Number((value / 1000).toFixe
 const dayFormat = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short' });
 const formatDay = (isoDate) => dayFormat.format(new Date(`${isoDate}T00:00:00`));
 
+// Chart ranges: the last 14 days, or everything the API returned.
+const RANGES = [{ value: 14, label: 'Last 14 days' }, { value: 0, label: 'All days' }];
+
 export function AnalyticsPage() {
   const queryClient = useQueryClient();
   const { params, page, update } = useListParams();
@@ -78,7 +82,15 @@ export function AnalyticsPage() {
 
   return (
     <>
-      <PageHeader title="Analytics" description="Revenue trend, ranking and totals for one restaurant." />
+      <PageHeader
+        title="Analytics"
+        description="Revenue trend, ranking and totals for one restaurant."
+        actions={(
+          <Button variant="secondary" onClick={() => refresh.mutate()} disabled={refresh.isPending}>
+            {refresh.isPending ? 'Refreshing…' : 'Refresh'}
+          </Button>
+        )}
+      />
 
       <div className="stack">
         <div className="row" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
@@ -88,9 +100,7 @@ export function AnalyticsPage() {
             selected={selected}
             onSelect={(r) => update({ restaurantId: r?.id ?? null })}
           />
-          <Button variant="secondary" onClick={() => refresh.mutate()} disabled={refresh.isPending}>
-            {refresh.isPending ? 'Refreshing…' : 'Refresh'}
-          </Button>
+          <span className="muted small">Revenue counts delivered orders only. Refresh updates the totals and ranking.</span>
         </div>
 
         {refresh.isError && <ErrorState error={refresh.error} onRetry={() => refresh.mutate()} />}
@@ -134,44 +144,7 @@ export function AnalyticsPage() {
               emptyMessage="This restaurant has no delivered orders."
               loadingLabel="Loading revenue…"
             >
-              {(data) => (
-                <>
-                  <div style={{ width: '100%', height: 320 }}>
-                    <ResponsiveContainer>
-                      <LineChart data={data.points} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
-                        <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" />
-                        <XAxis dataKey="date" tickFormatter={formatDay} tick={{ fontSize: 12 }} minTickGap={24} />
-                        <YAxis tickFormatter={axisMoney} tick={{ fontSize: 12 }} width={56} />
-                        <Tooltip
-                          labelFormatter={formatDay}
-                          formatter={(value) => formatMoney(Number(value))}
-                        />
-                        <Legend />
-                        <Line
-                          type="monotone"
-                          dataKey="dailyRevenue"
-                          name="Daily revenue"
-                          stroke="var(--color-primary)"
-                          strokeWidth={2}
-                          dot={false}
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="movingAvg7d"
-                          name="7-day average"
-                          stroke="var(--color-accent)"
-                          strokeWidth={2}
-                          strokeDasharray="6 4"
-                          dot={false}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <p className="muted small">
-                    The average covers the previous 7 calendar days. Days without delivered orders are left out, not counted as ₹0.
-                  </p>
-                </>
-              )}
+              {(data) => <RevenueChart points={data.points} />}
             </QueryState>
           </Card>
 
@@ -190,6 +163,12 @@ export function AnalyticsPage() {
                       { key: 'rank', header: '#', numeric: true },
                       { key: 'restaurantName', header: 'Restaurant' },
                       { key: 'totalRevenue', header: 'Revenue', numeric: true, render: (r) => formatMoney(r.totalRevenue) },
+                      {
+                        key: 'open', header: '', numeric: true,
+                        render: (r) => (r.restaurantId === revenue.data?.restaurantId
+                          ? <span className="muted small">Showing</span>
+                          : <span className="row-open" aria-hidden="true">View trend ›</span>),
+                      },
                     ]}
                     rows={data.items}
                     rowKey="restaurantId"
@@ -208,6 +187,65 @@ export function AnalyticsPage() {
           </Card>
         </div>
       </div>
+    </>
+  );
+}
+
+// Daily revenue and the 7-day average, with the latest day's figures above
+// the chart and a choice of range.
+function RevenueChart({ points }) {
+  const [range, setRange] = useState(14);
+  const shown = range ? points.slice(-range) : points;
+  const latest = points[points.length - 1];
+
+  return (
+    <>
+      <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
+        <div className="readout">
+          <span>{formatDay(latest.date)}</span>
+          <span><strong>{formatMoney(latest.dailyRevenue)}</strong> daily revenue</span>
+          <span className="readout__avg"><strong>{formatMoney(latest.movingAvg7d)}</strong> 7-day average</span>
+        </div>
+        <div className="chips" role="group" aria-label="Chart range">
+          {RANGES.map((r) => (
+            <button key={r.value} type="button" aria-pressed={range === r.value} onClick={() => setRange(r.value)}>{r.label}</button>
+          ))}
+        </div>
+      </div>
+      <div style={{ width: '100%', height: 320 }}>
+        <ResponsiveContainer>
+          <LineChart data={shown} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
+            <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" />
+            <XAxis dataKey="date" tickFormatter={formatDay} tick={{ fontSize: 12 }} minTickGap={24} />
+            <YAxis tickFormatter={axisMoney} tick={{ fontSize: 12 }} width={56} />
+            <Tooltip
+              labelFormatter={formatDay}
+              formatter={(value) => formatMoney(Number(value))}
+            />
+            <Legend />
+            <Line
+              type="monotone"
+              dataKey="dailyRevenue"
+              name="Daily revenue"
+              stroke="var(--color-primary)"
+              strokeWidth={2}
+              dot={false}
+            />
+            <Line
+              type="monotone"
+              dataKey="movingAvg7d"
+              name="7-day average"
+              stroke="var(--color-accent)"
+              strokeWidth={2}
+              strokeDasharray="6 4"
+              dot={false}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+      <p className="muted small">
+        The average covers the previous 7 calendar days. Days without delivered orders are left out, not counted as ₹0.
+      </p>
     </>
   );
 }

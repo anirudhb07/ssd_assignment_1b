@@ -15,13 +15,20 @@ restaurantsRouter.get('/', async (req, res) => {
 
   // Always use $1, $2… placeholders. Never build SQL by pasting in user input.
   const where = search ? 'WHERE name ILIKE $1' : '';
+  const listWhere = search ? 'WHERE r.name ILIKE $1' : '';
   const params = search ? [`%${search}%`] : [];
 
+  // Totals come from the materialized view (one indexed lookup per row), as
+  // on the restaurant page, so Browse can show them without counting orders.
   const [rows, count] = await Promise.all([
     query(
-      `SELECT id, name, latitude, longitude
-         FROM restaurants ${where}
-        ORDER BY name
+      `SELECT r.id, r.name, r.latitude, r.longitude,
+              COALESCE(s.completed_order_count, 0) AS "completedOrderCount",
+              COALESCE(s.completed_revenue, 0)     AS "completedRevenue"
+         FROM restaurants r
+         LEFT JOIN restaurant_order_summary s ON s.restaurant_id = r.id
+         ${listWhere}
+        ORDER BY r.name
         LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
       [...params, pageSize, offset],
     ),

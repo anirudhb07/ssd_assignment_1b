@@ -79,6 +79,25 @@ describe('AnalyticsPage', () => {
     expect(await screen.findByText('Revenue: Restaurant-1')).toBeTruthy();
   });
 
+  it("shows the latest day's revenue and 7-day average above the chart, with a range choice", async () => {
+    endpoints.getRevenue.mockResolvedValue({
+      restaurantId: 'r-1', restaurantName: 'Restaurant-1',
+      points: [
+        { date: '2026-10-01', dailyRevenue: 100, movingAvg7d: 100 },
+        { date: '2026-10-02', dailyRevenue: 300, movingAvg7d: 200 },
+      ],
+    });
+    renderPage('/analytics?restaurantId=r-1');
+
+    expect(await screen.findByText('₹300')).toBeTruthy();
+    expect(screen.getByText('₹200')).toBeTruthy();
+    expect(screen.getByText('2 Oct')).toBeTruthy();
+    const all = screen.getByRole('button', { name: 'All days' });
+    expect(all.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(all);
+    expect(all.getAttribute('aria-pressed')).toBe('true');
+  });
+
   it('asks for the top-ranked restaurant when the link has no restaurantId', async () => {
     renderPage('/analytics');
 

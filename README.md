@@ -30,15 +30,15 @@ There is no login. The **Acting as** switcher in the header picks the role for t
 | Screen | Route | Mainly for | What it covers |
 | --- | --- | --- | --- |
 | Home | `/` | Everyone | Links to every screen; shows whether the API and both databases are connected |
-| Browse: Restaurants, Users, Orders | `/browse` | Everyone | Browsing at scale: search, status filter, pages loaded from the server (never all 120,000 orders at once) |
-| Restaurant | `/browse/restaurants/:id` | Restaurant manager | Totals from the materialized view, its location, and links to its orders, menu and reviews, and analytics |
+| Browse: Restaurants, Users, Orders | `/browse` | Everyone | Browsing at scale: search, status filter, pages loaded from the server (never all 120,000 orders at once); restaurants show their delivered orders and revenue |
+| Restaurant | `/browse/restaurants/:id` | Restaurant manager | Totals from the materialized view, its location, **Place an order**, and links to its orders, menu and reviews, and analytics |
 | Customer | `/browse/users/:id` | Dispatcher | Wallet balance, the order in progress with **Advance status**, links to wallet history and orders |
 | Order | `/browse/orders/:id` | Dispatcher | **Advance status**: Preparing → Delivering → Delivered, which is how the one-active-order rule is demonstrated |
-| Checkout | `/checkout` | Customer | **Workflow 1** (`sp_execute_checkout`): balance before and after, the new `wallet_audit_logs` row, and friendly messages for not enough money (with **Top up**) and a second active order (with a link to it) |
-| Wallet | `/wallet` | Customer | **Audit trail**: one customer's `wallet_audit_logs`, read-only, with a date filter and the balance after each change |
-| Analytics | `/analytics` | Restaurant manager | **Workflow 2 + materialized view**: 7-day moving average chart, `DENSE_RANK` table, summary numbers with "last refreshed" and **Refresh** |
-| Map | `/map` | Dispatcher | **Workflow 3** (`$geoNear`): drivers within 5 km of a chosen restaurant, sorted by distance, updated every 5 seconds |
-| Reviews | `/reviews` | Restaurant manager | **Workflow 4** (`$facet`): rating distribution, top tags, average rating, and the restaurant's menu document |
+| Checkout | `/checkout` | Customer | **Workflow 1** (`sp_execute_checkout`): numbered steps with the wallet balance alongside; balance before and after, the new `wallet_audit_logs` row, and friendly messages for not enough money (with **Top up**) and a second active order (with a link to it) |
+| Wallet | `/wallet` | Customer | **Audit trail**: one customer's `wallet_audit_logs`, read-only, with a date filter, signed amounts (+ credit, − debit) and the balance after each change |
+| Analytics | `/analytics` | Restaurant manager | **Workflow 2 + materialized view**: 7-day moving average chart with the latest day's figures, `DENSE_RANK` table, summary numbers with "last refreshed" and **Refresh** |
+| Map | `/map` | Dispatcher | **Workflow 3** (`$geoNear`): drivers within 5 km of a chosen restaurant or any point (click the map or type it), sorted by distance and numbered on the map, updated every 5 seconds |
+| Reviews | `/reviews` | Restaurant manager | **Workflow 4** (`$facet`): rating distribution, top tags, average rating, the most mentioned tag, and the restaurant's menu document with category and availability filters |
 
 Every screen has loading, empty and error states and works at phone width.
 

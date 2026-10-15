@@ -38,9 +38,10 @@ function Restaurant({ restaurant }) {
           ]}
         />
       </Card>
-      {/* The Orders tab, Reviews and Analytics read restaurantId from the URL. */}
+      {/* Checkout, the Orders tab, Reviews and Analytics read restaurantId from the URL. */}
       <div className="row">
-        <Link className="btn btn--primary" to={`/browse?tab=orders&restaurantId=${id}`}>View orders</Link>
+        <Link className="btn btn--primary" to={`/checkout?restaurantId=${id}`}>Place an order</Link>
+        <Link className="btn btn--secondary" to={`/browse?tab=orders&restaurantId=${id}`}>View orders</Link>
         <Link className="btn btn--secondary" to={`/reviews?restaurantId=${id}`}>Menu &amp; reviews</Link>
         <Link className="btn btn--secondary" to={`/analytics?restaurantId=${id}`}>Analytics</Link>
       </div>

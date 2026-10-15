@@ -29,6 +29,16 @@ describe('GET /api/restaurants', () => {
     expect(res.body.total).toBeGreaterThan(10);
   });
 
+  it('gives each restaurant its totals from the summary view', async () => {
+    const res = await request(app).get('/api/restaurants?pageSize=5');
+    const [first] = res.body.items;
+    expect(Object.keys(first).sort()).toEqual(['completedOrderCount', 'completedRevenue', 'id', 'latitude', 'longitude', 'name']);
+    // The same numbers as the restaurant page, which reads the same view.
+    const detail = await request(app).get(`/api/restaurants/${first.id}`);
+    expect(first.completedOrderCount).toBe(detail.body.summary.completedOrderCount);
+    expect(first.completedRevenue).toBe(detail.body.summary.completedRevenue);
+  });
+
   it('caps pageSize at 100', async () => {
     const res = await request(app).get('/api/restaurants?pageSize=100000');
     expect(res.body.pageSize).toBe(100);

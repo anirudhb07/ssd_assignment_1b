@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getNearbyDrivers, listRestaurants } from '../api/endpoints.js';
 import { MapPage } from './MapPage.jsx';
@@ -9,9 +10,12 @@ vi.mock('react-leaflet', () => ({
   MapContainer: ({ children }) => <div data-testid="map-container">{children}</div>,
   TileLayer: () => <div data-testid="tile-layer" />,
   Circle: ({ center, radius }) => <div data-testid="map-circle" data-center={JSON.stringify(center)} data-radius={radius} />,
-  Marker: ({ position, children }) => <div data-testid="map-marker" data-position={JSON.stringify(position)}>{children}</div>,
+  Marker: ({ position, icon, children }) => (
+    <div data-testid="map-marker" data-position={JSON.stringify(position)} data-icon={icon?.options?.html?.match(/>(\d+)</)?.[1]}>{children}</div>
+  ),
   Popup: ({ children }) => <div data-testid="map-popup">{children}</div>,
   useMap: () => ({ setView: vi.fn(), fitBounds: vi.fn() }),
+  useMapEvents: () => null,
 }));
 
 vi.mock('../api/endpoints.js', () => ({
@@ -136,6 +140,33 @@ describe('MapPage', () => {
     expect(screen.getByTestId('map-circle')).toBeInTheDocument();
     const markers = screen.getAllByTestId('map-marker');
     expect(markers).toHaveLength(4); // 1 origin + 3 drivers
+  });
+
+  it('numbers the driver markers to match the list', async () => {
+    getNearbyDrivers.mockResolvedValue({ origin: { lat: 12.9716, lng: 77.5946 }, radiusMeters: 5000, drivers: mockDrivers });
+    renderMapPage();
+    await screen.findAllByText('driver-000347');
+    const icons = screen.getAllByTestId('map-marker').slice(1).map((m) => m.getAttribute('data-icon'));
+    expect(icons).toEqual(['1', '2', '3']);
+    expect(screen.getByText('Live · every 5 s')).toBeInTheDocument();
+  });
+
+  it('searches around a typed point instead of the restaurant', async () => {
+    getNearbyDrivers.mockResolvedValue({ origin: { lat: 13, lng: 77.6 }, radiusMeters: 5000, drivers: mockDrivers });
+    renderMapPage();
+    await waitFor(() => expect(getNearbyDrivers).toHaveBeenCalledWith(expect.objectContaining({ lat: 12.9716, lng: 77.5946 })));
+
+    const setOrigin = screen.getByRole('button', { name: 'Set origin' });
+    expect(setOrigin).toBeDisabled();
+    await userEvent.type(screen.getByLabelText('Latitude'), '13');
+    await userEvent.type(screen.getByLabelText('Longitude'), '77.6');
+    await userEvent.click(setOrigin);
+
+    await waitFor(() => expect(getNearbyDrivers).toHaveBeenLastCalledWith(expect.objectContaining({ lat: 13, lng: 77.6 })));
+    const originLine = () => screen.getByText(/^Origin:/);
+    expect(originLine()).toHaveTextContent('Origin: Custom point (13.0000, 77.6000)');
+    await userEvent.click(screen.getByRole('button', { name: 'Back to restaurant' }));
+    expect(originLine()).toHaveTextContent('Origin: Restaurant-166 (12.9716, 77.5946)');
   });
 
   it('refetches nearby drivers after 5 seconds', async () => {
