@@ -33,13 +33,15 @@ code { font-family: var(--font-mono); font-size: 0.9em; }
   margin: 0 auto;
   min-height: var(--header-height);
   padding: var(--space-2) var(--space-4);
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: var(--space-3) var(--space-5);
 }
 .app-brand { font-weight: 700; font-size: var(--text-lg); color: var(--color-primary); text-decoration: none; }
-.app-nav { display: flex; flex-wrap: wrap; gap: var(--space-1); flex: 1; }
+.app-nav { display: flex; grid-column: 1 / -1; grid-row: 2; gap: var(--space-1); }
+.actor-switcher { grid-column: 2; grid-row: 1; justify-self: end; display: flex; align-items: start; gap: var(--space-3); min-width: 0; }
+.actor-switcher__role { display: flex; align-items: center; gap: var(--space-2); white-space: nowrap; }
 .app-nav a {
   padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-sm);
@@ -47,6 +49,7 @@ code { font-family: var(--font-mono); font-size: 0.9em; }
   text-decoration: none;
   font-size: var(--text-sm);
   font-weight: 500;
+  white-space: nowrap;
 }
 .app-nav a:hover { color: var(--color-text); background: var(--color-bg); }
 .app-nav a.active { color: var(--color-primary); background: var(--color-primary-soft); }
@@ -69,7 +72,13 @@ code { font-family: var(--font-mono); font-size: 0.9em; }
 
 @media (max-width: 640px) {
   .app-main { padding-inline: var(--space-3); }
-  /* Nav becomes one scrollable row under the brand */
-  .app-nav { order: 3; flex-basis: 100%; flex-wrap: nowrap; overflow-x: auto; }
-  .app-nav a { white-space: nowrap; }
+  .app-nav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .app-nav a { text-align: center; padding-block: var(--space-3); }
+  .actor-switcher { flex-direction: column; align-items: stretch; }
+  .actor-switcher__role .select { flex: 1; }
+}
+
+@media (max-width: 900px) {
+  .app-header__inner { grid-template-columns: minmax(0, 1fr); }
+  .actor-switcher { grid-column: 1; grid-row: 3; justify-self: stretch; }
 }

@@ -1,18 +1,17 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useDebouncedValue } from '../hooks/useDebouncedValue.js';
 
-// A search box that narrows a dropdown of up to 20 matches, so any of the
-// 10,000 customers or 500 restaurants can be picked. The current choice
-// stays listed even when it isn't among the matches. Used by the "Acting as"
-// switcher and the Wallet screen.
-//
+// Search one server-side page, retaining the current choice outside matches.
+// Automatic selection is opt-in: Wallet keeps its explicit selection behavior.
 // selected / onSelect use { id, name } (or null for no choice).
 export function SearchPicker({
   noun, fetchList, selected, onSelect,
   searchLabel = `Search ${noun}s`, selectLabel = `Choose a ${noun}`,
+  autoSelectMatch = false,
 }) {
   const [search, setSearch] = useState('');
+  const pendingSelection = useRef(false);
   const debounced = useDebouncedValue(search);
   const list = useQuery({
     queryKey: ['actor-picker', noun, debounced],
@@ -20,36 +19,53 @@ export function SearchPicker({
     placeholderData: keepPreviousData,
   });
   const items = list.data?.items ?? [];
+  const searching = search !== debounced || list.isFetching || list.isPending;
+  const ready = !searching && !list.isPlaceholderData && list.isSuccess;
 
-  const firstOption = list.isPending ? 'Loading…'
-    : list.isError ? `Couldn’t load ${noun}s`
-    : items.length ? `Choose a ${noun}`
-    : 'No matches';
+  // Only a user edit arms selection: refetches or manual clearing must not
+  // change the actor later. Never choose the first of multiple matches.
+  useEffect(() => {
+    if (list.isError) pendingSelection.current = false;
+    if (!ready || !pendingSelection.current) return;
+    pendingSelection.current = false;
+    // Only auto-select when the server confirms exactly one match.
+    // A single item on a paginated results page is not proof of uniqueness.
+    const match = list.data?.total === 1 && items.length === 1 ? items[0] : null;
+    if (autoSelectMatch && search.trim()
+      && match?.id && match.name && match.id !== selected?.id) {
+      onSelect({ id: match.id, name: match.name });
+    }
+  }, [ready, autoSelectMatch, search, list.data, list.isError, items, selected?.id, onSelect]);
+
+  // Feedback stays inside the fixed-width dropdown, keeping the header height stable.
+  const firstOption = searching ? 'Loading…'
+    : list.isError ? `Couldn't load ${noun}s`
+    : items.length ? `Choose a ${noun}` : 'No matches';
 
   return (
-    <>
+    <div className="search-picker">
       <input
-        className="input"
-        type="search"
-        aria-label={searchLabel}
+        className="input" type="search" aria-label={searchLabel}
         placeholder={`Search ${noun}s`}
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        style={{ width: '10rem' }}
+        value={search} onChange={(e) => {
+          pendingSelection.current = Boolean(e.target.value.trim());
+          setSearch(e.target.value);
+        }}
       />
       <select
-        className="select"
-        aria-label={selectLabel}
-        value={selected?.id ?? ''}
+        className="select" aria-label={selectLabel} value={selected?.id ?? ''}
+        disabled={!ready}
         onChange={(e) => {
+          pendingSelection.current = false;
           const found = items.find((x) => x.id === e.target.value);
-          onSelect(found ? { id: found.id, name: found.name } : null);
+          if (found) onSelect({ id: found.id, name: found.name });
+          else if (!e.target.value) onSelect(null);
         }}
       >
         <option value="">{firstOption}</option>
         {selected && !items.some((x) => x.id === selected.id) && <option value={selected.id}>{selected.name}</option>}
         {items.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
       </select>
-    </>
+    </div>
   );
 }

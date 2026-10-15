@@ -59,7 +59,7 @@ beforeEach(() => {
 describe('whose wallet', () => {
   it('asks for a customer when there is none in the link or in Acting as', async () => {
     renderAt('/wallet');
-    expect(await screen.findByText('Choose a customer')).toBeInTheDocument();
+    expect(await screen.findByText('Choose a customer', { selector: 'strong' })).toBeInTheDocument();
     expect(getUserAudit).not.toHaveBeenCalled();
   });
 
@@ -177,4 +177,18 @@ describe('history', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Cannot reach the API.');
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
   });
+});
+
+it('keeps the displayed wallet unchanged while searching for a unique different customer', async () => {
+  listUsers.mockImplementation(async ({ search }) => page(search ? [users.u2] : Object.values(users)));
+  renderAt('/wallet?userId=u1');
+  await screen.findByText('₹33,683', { selector: '.stat__value' });
+  await userEvent.type(screen.getByLabelText('Find a customer'), '7adb5d92');
+  await waitFor(() => expect(listUsers).toHaveBeenCalledWith({ search: '7adb5d92', pageSize: 20 }));
+  await waitFor(() => expect(screen.getByLabelText('Customer')).toBeEnabled());
+  expect(screen.getByLabelText('Customer')).toHaveValue('u1');
+  expect(lastTableCall()[0]).toBe('u1');
+  await userEvent.selectOptions(screen.getByLabelText('Customer'), 'u2');
+  await screen.findByText('₹24,948', { selector: '.stat__value' });
+  expect(lastTableCall()[0]).toBe('u2');
 });
