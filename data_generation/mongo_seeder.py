@@ -180,22 +180,8 @@ def create_driver_ping(driver_id):
     longitude = 77.5946 + random.uniform(-0.08, 0.08)
 
     created_at = (
-<<<<<<< Updated upstream
-
-        datetime.now(
-            timezone.utc
-        )
-
-        - timedelta(
-            seconds=random.randint(
-                0,
-                3 * 60 * 60
-            )
-        )
-=======
         datetime.now(timezone.utc)
-        - timedelta(seconds=random.randint(0, 1 * 60 * 60))
->>>>>>> Stashed changes
+        - timedelta(seconds=random.randint(0, 3 * 60 * 60))
     )
 
     return {
@@ -234,25 +220,10 @@ def seed_database(
     reviews = database["Reviews"]
     driver_pings = database["DriverPings"]
 
-<<<<<<< Updated upstream
-
-    menus = database[
-        "Menus"
-    ]
-
-    reviews = database[
-        "Reviews"
-    ]
-
-    driver_pings = database[
-        "DriverPings"
-    ]
-
-=======
     # Idempotency check: don't duplicate documents if already seeded.
     # To re-seed (e.g. after switching from random IDs to Postgres-linked
-    # data), drop the old collections first:
-    #   db.Menus.drop(); db.Reviews.drop(); db.DriverPings.drop()
+    # data), clear the old collections first:
+    #   db.Menus.deleteMany({}); db.Reviews.deleteMany({}); db.DriverPings.deleteMany({})
     existing_menus = menus.count_documents({})
     if existing_menus > 0:
         print(
@@ -261,7 +232,6 @@ def seed_database(
         )
         client.close()
         return
->>>>>>> Stashed changes
 
     # =================================================
     # READ REAL DATA FROM POSTGRES
