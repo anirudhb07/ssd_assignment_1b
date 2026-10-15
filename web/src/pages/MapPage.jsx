@@ -4,7 +4,9 @@ import 'leaflet/dist/leaflet.css';
 import { useEffect, useMemo, useState } from 'react';
 import { Circle, MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet';
 import { getNearbyDrivers, listRestaurants } from '../api/endpoints.js';
-import { Button, Card, PageHeader, QueryState, SelectField, Stat, TextField } from '../components/ui/index.js';
+import {
+  Button, Card, EmptyState, ErrorState, PageHeader, QueryState, SelectField, Stat, TextField,
+} from '../components/ui/index.js';
 import { useDebouncedValue } from '../hooks/useDebouncedValue.js';
 import { formatDateTime, formatDistance, formatTime } from '../lib/format.js';
 
@@ -154,123 +156,131 @@ export function MapPage() {
         </Card>
       </div>
 
-      {/* Main View: Map + Sidebar list, wrapped in QueryState */}
-      <QueryState
-        query={driversQuery}
-        isEmpty={(data) => !data?.drivers || data.drivers.length === 0}
-        emptyTitle="No drivers within 5 km"
-        emptyMessage="No active drivers found within 5 km of this restaurant. Pings arrive continuously from moving drivers."
-      >
-        {({ origin: resolvedOrigin, radiusMeters, drivers: driverList }) => (
-          <div
-            className="map-layout"
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))',
-              gap: 'var(--space-4)',
-              alignItems: 'start',
-            }}
-          >
-            {/* Map Card */}
-            <Card title={`Live Map (${formatDistance(radiusMeters)} radius)`}>
-              <div style={{ height: '500px', width: '100%', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
-                <MapContainer
-                  center={[resolvedOrigin.lat, resolvedOrigin.lng]}
-                  zoom={12}
-                  scrollWheelZoom={false}
-                  style={{ height: '100%', width: '100%' }}
-                >
-                  <TileLayer
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                  />
-                  <RecenterMap lat={resolvedOrigin.lat} lng={resolvedOrigin.lng} radiusMeters={radiusMeters} />
-
-                  {/* 5 km Radius Circle */}
-                  <Circle
+      {/* Main View: Map + Sidebar list, wrapped in QueryState. The drivers
+          query waits for an origin, so without one say why instead of
+          showing "Loading…" forever. */}
+      {restaurantsQuery.isError ? (
+        <ErrorState error={restaurantsQuery.error} onRetry={() => restaurantsQuery.refetch()} />
+      ) : restaurantsQuery.isSuccess && !origin ? (
+        <EmptyState title="No restaurants match" message="Try a different name in Filter restaurants." />
+      ) : (
+        <QueryState
+          query={driversQuery}
+          isEmpty={(data) => !data?.drivers || data.drivers.length === 0}
+          emptyTitle="No drivers within 5 km"
+          emptyMessage="No active drivers found within 5 km of this restaurant. Pings arrive continuously from moving drivers."
+        >
+          {({ origin: resolvedOrigin, radiusMeters, drivers: driverList }) => (
+            <div
+              className="map-layout"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))',
+                gap: 'var(--space-4)',
+                alignItems: 'start',
+              }}
+            >
+              {/* Map Card */}
+              <Card title={`Live Map (${formatDistance(radiusMeters)} radius)`}>
+                <div style={{ height: '500px', width: '100%', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
+                  <MapContainer
                     center={[resolvedOrigin.lat, resolvedOrigin.lng]}
-                    radius={radiusMeters}
-                    pathOptions={{
-                      color: 'var(--color-primary, #1f6f5c)',
-                      fillColor: 'var(--color-primary, #1f6f5c)',
-                      fillOpacity: 0.08,
-                      dashArray: '6, 6',
-                    }}
-                  />
-
-                  {/* Origin Restaurant Marker */}
-                  <Marker
-                    position={[resolvedOrigin.lat, resolvedOrigin.lng]}
-                    icon={restaurantIcon}
+                    zoom={12}
+                    scrollWheelZoom={false}
+                    style={{ height: '100%', width: '100%' }}
                   >
-                    <Popup>
-                      <strong>{currentRestaurant?.name || 'Selected Origin'}</strong>
-                      <div className="small muted">
-                        {resolvedOrigin.lat.toFixed(4)}, {resolvedOrigin.lng.toFixed(4)}
-                      </div>
-                    </Popup>
-                  </Marker>
-
-                  {/* Driver Markers */}
-                  {driverList.map((d) => (
+                    <TileLayer
+                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    />
+                    <RecenterMap lat={resolvedOrigin.lat} lng={resolvedOrigin.lng} radiusMeters={radiusMeters} />
+  
+                    {/* 5 km Radius Circle */}
+                    <Circle
+                      center={[resolvedOrigin.lat, resolvedOrigin.lng]}
+                      radius={radiusMeters}
+                      pathOptions={{
+                        color: 'var(--color-primary, #1f6f5c)',
+                        fillColor: 'var(--color-primary, #1f6f5c)',
+                        fillOpacity: 0.08,
+                        dashArray: '6, 6',
+                      }}
+                    />
+  
+                    {/* Origin Restaurant Marker */}
                     <Marker
-                      key={d.driverId}
-                      position={[d.lat, d.lng]}
-                      icon={driverIcon}
+                      position={[resolvedOrigin.lat, resolvedOrigin.lng]}
+                      icon={restaurantIcon}
                     >
                       <Popup>
-                        <strong>{d.driverId}</strong>
-                        <div>Distance: {formatDistance(d.distanceMeters)}</div>
+                        <strong>{currentRestaurant?.name || 'Selected Origin'}</strong>
                         <div className="small muted">
-                          Last seen: {formatTime(d.lastSeenAt)}
+                          {resolvedOrigin.lat.toFixed(4)}, {resolvedOrigin.lng.toFixed(4)}
                         </div>
                       </Popup>
                     </Marker>
+  
+                    {/* Driver Markers */}
+                    {driverList.map((d) => (
+                      <Marker
+                        key={d.driverId}
+                        position={[d.lat, d.lng]}
+                        icon={driverIcon}
+                      >
+                        <Popup>
+                          <strong>{d.driverId}</strong>
+                          <div>Distance: {formatDistance(d.distanceMeters)}</div>
+                          <div className="small muted">
+                            Last seen: {formatTime(d.lastSeenAt)}
+                          </div>
+                        </Popup>
+                      </Marker>
+                    ))}
+                  </MapContainer>
+                </div>
+              </Card>
+  
+              {/* Side List: Drivers sorted by distance */}
+              <Card title={`Nearby Drivers (${driverList.length})`}>
+                <div
+                  className="stack"
+                  style={{
+                    maxHeight: '500px',
+                    overflowY: 'auto',
+                    gap: 'var(--space-2)',
+                  }}
+                >
+                  {driverList.map((d, index) => (
+                    <div
+                      key={d.driverId}
+                      className="row"
+                      style={{
+                        justifyContent: 'space-between',
+                        padding: 'var(--space-2) var(--space-3)',
+                        backgroundColor: index % 2 === 0 ? 'var(--color-bg)' : 'transparent',
+                        borderRadius: 'var(--radius-sm)',
+                      }}
+                    >
+                      <div className="row" style={{ gap: 'var(--space-2)' }}>
+                        <span className="muted small num">{index + 1}.</span>
+                        <strong className="small">{d.driverId}</strong>
+                      </div>
+                      <div className="row" style={{ gap: 'var(--space-3)' }}>
+                        <span className="num" style={{ fontWeight: 600 }}>
+                          {formatDistance(d.distanceMeters)}
+                        </span>
+                        <span className="muted small" style={{ minWidth: '60px', textAlign: 'right' }}>
+                          {formatTime(d.lastSeenAt)}
+                        </span>
+                      </div>
+                    </div>
                   ))}
-                </MapContainer>
-              </div>
-            </Card>
-
-            {/* Side List: Drivers sorted by distance */}
-            <Card title={`Nearby Drivers (${driverList.length})`}>
-              <div
-                className="stack"
-                style={{
-                  maxHeight: '500px',
-                  overflowY: 'auto',
-                  gap: 'var(--space-2)',
-                }}
-              >
-                {driverList.map((d, index) => (
-                  <div
-                    key={d.driverId}
-                    className="row"
-                    style={{
-                      justifyContent: 'space-between',
-                      padding: 'var(--space-2) var(--space-3)',
-                      backgroundColor: index % 2 === 0 ? 'var(--color-bg)' : 'transparent',
-                      borderRadius: 'var(--radius-sm)',
-                    }}
-                  >
-                    <div className="row" style={{ gap: 'var(--space-2)' }}>
-                      <span className="muted small num">{index + 1}.</span>
-                      <strong className="small">{d.driverId}</strong>
-                    </div>
-                    <div className="row" style={{ gap: 'var(--space-3)' }}>
-                      <span className="num" style={{ fontWeight: 600 }}>
-                        {formatDistance(d.distanceMeters)}
-                      </span>
-                      <span className="muted small" style={{ minWidth: '60px', textAlign: 'right' }}>
-                        {formatTime(d.lastSeenAt)}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          </div>
-        )}
-      </QueryState>
+                </div>
+              </Card>
+            </div>
+          )}
+        </QueryState>
+      )}
     </div>
   );
 }

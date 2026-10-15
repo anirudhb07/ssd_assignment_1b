@@ -282,7 +282,7 @@ Every endpoint in `docs/api_endpoints.md` already answers. Routes marked `MOCK` 
 
 ### Building a screen
 
-1. Open your page in `web/src/pages/`. The `ScreenPlaceholder` on it lists what to build and which API functions to use. Delete it when the screen is done.
+1. Pages live in `web/src/pages/`. A new page also needs a route in `web/src/App.jsx`, which loads each screen when it is first opened.
 2. Fetch data with TanStack Query and the functions in `web/src/api/endpoints.js`. Never call `fetch` directly.
 3. Wrap every query in `QueryState` so loading, empty and error states are handled.
 4. Build from the components in `web/src/components/ui/` and the variables in `web/src/styles/tokens.css`, so all screens look the same.
