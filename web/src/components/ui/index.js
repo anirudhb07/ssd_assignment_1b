@@ -8,6 +8,5 @@ export { Field, SelectField, TextField } from './Field.jsx';
 export { PageHeader } from './PageHeader.jsx';
 export { Pagination } from './Pagination.jsx';
 export { EmptyState, ErrorState, Loading, QueryState } from './QueryState.jsx';
-export { ScreenPlaceholder } from './ScreenPlaceholder.jsx';
 export { StatusBadge } from './StatusBadge.jsx';
 export { Tabs } from './Tabs.jsx';

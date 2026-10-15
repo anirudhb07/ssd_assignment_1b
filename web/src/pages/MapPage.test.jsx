@@ -84,6 +84,27 @@ describe('MapPage', () => {
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
   });
 
+  // Issue #25: with no origin the drivers query never runs, so these used to
+  // show "Loading…" forever.
+  it('shows the error when the restaurant list fails, instead of loading forever', async () => {
+    listRestaurants.mockRejectedValue(new Error('Cannot reach the API. Check that it is running.'));
+
+    renderMapPage();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Cannot reach the API');
+    expect(screen.queryByText('Loading…')).not.toBeInTheDocument();
+    expect(getNearbyDrivers).not.toHaveBeenCalled();
+  });
+
+  it('says so when no restaurant matches the filter', async () => {
+    listRestaurants.mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 100 });
+
+    renderMapPage();
+
+    expect(await screen.findByText('No restaurants match')).toBeInTheDocument();
+    expect(screen.queryByText('Loading…')).not.toBeInTheDocument();
+  });
+
   it('renders sorted list of nearby drivers and map markers', async () => {
     getNearbyDrivers.mockResolvedValue({
       origin: { lat: 12.9716, lng: 77.5946 },
