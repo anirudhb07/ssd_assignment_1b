@@ -42,7 +42,7 @@ function Customer({ user }) {
     queryClient.invalidateQueries({ queryKey: ['orders'] }),
   ]);
   const advance = useMutation({
-    mutationFn: (orderId) => advanceOrder(orderId),
+    mutationFn: ({ id, status }) => advanceOrder(id, status),
     onMutate: () => setNotice(null),
     onSuccess: (order) => {
       setNotice(order.status === 'DELIVERED'
@@ -99,7 +99,7 @@ function Customer({ user }) {
 
       <div className="row">
         {active && (
-          <Button onClick={() => advance.mutate(active.id)} disabled={advance.isPending}>
+          <Button onClick={() => advance.mutate({ id: active.id, status: active.status })} disabled={advance.isPending}>
             {advance.isPending ? 'Advancing…' : 'Advance status'}
           </Button>
         )}

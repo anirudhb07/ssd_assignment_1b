@@ -17,7 +17,8 @@ export const getOrder = (id) => api(`/orders/${id}`);
 
 // Workflow 1: checkout and order status
 export const checkout = (body, params) => api('/checkout', { method: 'POST', body, params });
-export const advanceOrder = (id) => api(`/orders/${id}/advance`, { method: 'POST' });
+// `from` is the status the page shows; the API refuses (409) if it changed meanwhile.
+export const advanceOrder = (id, from) => api(`/orders/${id}/advance`, { method: 'POST', body: from ? { from } : undefined });
 export const topUpWallet = (userId, amount) => api(`/users/${userId}/topup`, { method: 'POST', body: { amount } });
 
 // Wallet audit trail

@@ -7,6 +7,7 @@ import {
 } from '../components/ui/index.js';
 import { useDebouncedValue } from '../hooks/useDebouncedValue.js';
 import { useListParams } from '../hooks/useListParams.js';
+import { usePastTheEnd } from '../hooks/usePastTheEnd.js';
 import { formatDateTime, formatMoney } from '../lib/format.js';
 
 const TABS = [
@@ -65,13 +66,14 @@ function RestaurantsTab() {
     queryFn: () => listRestaurants({ page, pageSize: PAGE_SIZE, search: debounced }),
     placeholderData: keepPreviousData, // keep the old page visible while the next one loads
   });
+  const pastTheEnd = usePastTheEnd(query.data, page, update);
 
   return (
     <div className="stack">
       <TextField id="restaurants-search" label="Search restaurants" placeholder="e.g. Kaveri" value={search} onChange={onChange} />
       <QueryState
         query={query}
-        isEmpty={(d) => d.items.length === 0}
+        isEmpty={(d) => d.items.length === 0 && !pastTheEnd}
         emptyTitle="No restaurants found"
         emptyMessage={debounced ? `Nothing matches “${debounced}”.` : undefined}
       >
@@ -106,13 +108,14 @@ function UsersTab() {
     queryFn: () => listUsers({ page, pageSize: PAGE_SIZE, search: debounced }),
     placeholderData: keepPreviousData,
   });
+  const pastTheEnd = usePastTheEnd(query.data, page, update);
 
   return (
     <div className="stack">
       <TextField id="users-search" label="Search customers" placeholder="e.g. User-1a2b" value={search} onChange={onChange} />
       <QueryState
         query={query}
-        isEmpty={(d) => d.items.length === 0}
+        isEmpty={(d) => d.items.length === 0 && !pastTheEnd}
         emptyTitle="No customers found"
         emptyMessage={debounced ? `Nothing matches “${debounced}”.` : undefined}
       >
@@ -156,6 +159,7 @@ function OrdersTab() {
     queryFn: () => listOrders({ page, pageSize: PAGE_SIZE, ...filters }),
     placeholderData: keepPreviousData,
   });
+  const pastTheEnd = usePastTheEnd(query.data, page, update);
 
   // Name the customer or restaurant being filtered on, from the rows themselves.
   const first = query.data?.items[0];
@@ -186,7 +190,7 @@ function OrdersTab() {
       )}
       <QueryState
         query={query}
-        isEmpty={(d) => d.items.length === 0}
+        isEmpty={(d) => d.items.length === 0 && !pastTheEnd}
         emptyTitle="No orders found"
         emptyMessage={status || scope ? 'No orders match these filters.' : undefined}
       >

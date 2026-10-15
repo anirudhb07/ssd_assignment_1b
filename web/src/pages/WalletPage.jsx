@@ -66,7 +66,9 @@ export function WalletPage() {
       </div>
 
       {userId ? (
-        <QueryState query={user} loadingLabel="Loading customer…">
+        user.isError && user.error?.status === 404 ? (
+          <div className="alert alert--error" role="alert">That customer no longer exists. Choose another customer above or in Acting as.</div>
+        ) : <QueryState query={user} loadingLabel="Loading customer…">
           {(customer) => <CustomerWallet customer={customer} from={from} to={to} page={page} update={update} />}
         </QueryState>
       ) : (

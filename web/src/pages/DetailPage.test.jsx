@@ -122,7 +122,7 @@ describe('Customer page', () => {
     expect(await screen.findByText('Advance status moves it to Delivering.')).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Advance status' }));
-    expect(advanceOrder).toHaveBeenCalledWith('o1');
+    expect(advanceOrder).toHaveBeenCalledWith('o1', 'PREPARING');
     expect(await screen.findByRole('status')).toHaveTextContent('Order moved to Delivering.');
     await waitFor(() => expect(statValue('Order in progress')).toHaveTextContent('Delivering'));
     expect(screen.getByText('Advance status moves it to Delivered.')).toBeInTheDocument();

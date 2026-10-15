@@ -74,7 +74,7 @@ describe('Order detail', () => {
     expect(await screen.findByText('Order delivered.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Advance status' })).not.toBeInTheDocument();
     expect(advanceOrder).toHaveBeenCalledTimes(2);
-    expect(advanceOrder).toHaveBeenLastCalledWith('o1');
+    expect(advanceOrder).toHaveBeenLastCalledWith('o1', 'DELIVERING'); // the status the page showed
     expect(getOrder).toHaveBeenCalledTimes(3);
   });
 
