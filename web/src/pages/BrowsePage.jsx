@@ -68,7 +68,7 @@ function RestaurantsTab() {
 
   return (
     <div className="stack">
-      <TextField id="restaurants-search" label="Search restaurants" placeholder="e.g. Restaurant-12" value={search} onChange={onChange} />
+      <TextField id="restaurants-search" label="Search restaurants" placeholder="e.g. Kaveri" value={search} onChange={onChange} />
       <QueryState
         query={query}
         isEmpty={(d) => d.items.length === 0}

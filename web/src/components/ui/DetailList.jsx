@@ -1,5 +1,5 @@
 // Label/value rows, e.g. inside a "Details" card on a detail page.
-//   <DetailList items={[['Restaurant', 'Restaurant-166'], ['Amount', '₹640']]} />
+//   <DetailList items={[['Restaurant', 'Kaveri Dosa Corner'], ['Amount', '₹640']]} />
 export function DetailList({ items }) {
   return (
     <dl className="details">

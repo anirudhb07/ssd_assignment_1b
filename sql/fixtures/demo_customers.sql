@@ -26,10 +26,11 @@ DECLARE
     in_progress UUID;
     balance DECIMAL(10,2);
 BEGIN
-    -- Restaurant names are stable across reseeds (ids are not).
-    SELECT id INTO restaurant FROM restaurants WHERE name = 'Restaurant-1';
+    -- The alphabetically first restaurant ("Ananda Bakery" with the default
+    -- seed). Its name is the same on every machine; ids are not.
+    SELECT id INTO restaurant FROM restaurants ORDER BY name, id LIMIT 1;
     IF restaurant IS NULL THEN
-        RAISE NOTICE 'Demo customers skipped: Restaurant-1 does not exist yet.';
+        RAISE NOTICE 'Demo customers skipped: there are no restaurants yet.';
         RETURN;
     END IF;
 

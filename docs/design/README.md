@@ -55,7 +55,7 @@ The names under each piece match the React components below, so a wireframe can 
 3. Fill it in by copying pieces from the **Pieces** frame (Ctrl+C, Ctrl+V). Don't draw your own buttons, tables or cards.
 4. Need something the kit doesn't have? Ask the design reviewer to add it to the kit first, so everyone gets the same version.
 5. Keep it grey. Colours are decided in `web/src/styles/tokens.css`, not in wireframes.
-6. Use real sample text: Restaurant-166, User-1a2b3c4d, ₹4,250, 12 Oct, 10:42.
+6. Use real sample text: Kaveri Dosa Corner, User-1a2b3c4d, ₹4,250, 12 Oct, 10:42.
 7. Show the loading, empty and error states where the screen has them.
 8. Delete the kit parts you didn't use, then save as `docs/design/<screen>.excalidraw` (☰ → **Save to…**) and export `docs/design/<screen>.png` (☰ → **Export image**).
 9. On a branch named after the issue (e.g. `des-2-checkout`), open a pull request with `Closes #2` and ask the design reviewer to look.

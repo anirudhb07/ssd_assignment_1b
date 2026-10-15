@@ -128,7 +128,7 @@ export function MapPage() {
             <TextField
               id="restaurant-search"
               label="Filter restaurants"
-              placeholder="e.g. Restaurant-166"
+              placeholder="e.g. Kaveri"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />

@@ -45,7 +45,7 @@ function expectDemoState(state) {
 }
 
 const restaurantId = async (client) =>
-  (await client.query("SELECT id FROM restaurants WHERE name = 'Restaurant-1'")).rows[0].id;
+  (await client.query('SELECT id FROM restaurants ORDER BY name, id LIMIT 1')).rows[0].id;
 
 const checkout = (client, userId, restaurant, amount) =>
   client.query('CALL sp_execute_checkout(gen_random_uuid(), $1, $2, $3)', [userId, restaurant, amount]);
