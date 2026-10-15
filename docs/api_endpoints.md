@@ -42,7 +42,7 @@ The mapping from PostgreSQL errors lives in `api/src/lib/errors.js`.
 | `POST /users/:id/topup` | REAL | `sp_wallet_topup` | Checkout |
 | `GET /restaurants` | REAL | `restaurants` | Browse, actor switcher |
 | `GET /restaurants/:id` | REAL | `restaurants`, `restaurant_order_summary` | Browse detail |
-| `GET /restaurants/:id/menu` | MOCK | Mongo `Menus` | Checkout, Reviews |
+| `GET /restaurants/:id/menu` | REAL | Mongo `Menus` | Checkout, Reviews |
 | `GET /orders` | REAL | `orders` | Browse |
 | `GET /orders/:id` | REAL | `orders` | Browse detail |
 | `POST /orders/:id/advance` | REAL | `sp_advance_order_status` | Browse detail |

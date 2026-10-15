@@ -1,8 +1,9 @@
 import { Router } from 'express';
+import { getDb } from '../db/mongo.js';
 import { query } from '../db/postgres.js';
+import { requireId } from '../lib/checkoutInput.js';
 import { notFound } from '../lib/errors.js';
 import { paged, parsePagination } from '../lib/pagination.js';
-import { menu, sendMock } from '../mocks.js';
 
 export const restaurantsRouter = Router();
 
@@ -50,9 +51,19 @@ restaurantsRouter.get('/:id', async (req, res) => {
   res.json({ ...restaurant, summary: { completedOrderCount: completedOrderCount ?? 0, completedRevenue: completedRevenue ?? 0 } });
 });
 
-// GET /api/restaurants/:id/menu — MOCK. TODO (Member C): Menus.findOne({ restaurantId }).
-// The real query finds nothing until seeder fix #1 links Mongo restaurant IDs
-// to PostgreSQL; return 404 NOT_FOUND when there is no menu.
-restaurantsRouter.get('/:id/menu', (req, res) => {
-  sendMock(res, { ...menu, restaurantId: req.params.id });
+// GET /api/restaurants/:id/menu — REAL.
+// The Menus document for the restaurant. Menus use the PostgreSQL restaurant id
+// (mongo_seeder.py reads it from PostgreSQL), so any id from /restaurants works.
+// A malformed id is a 400 (same as the other routes). A well-formed id with no
+// menu, including an id that isn't a restaurant, is a 404.
+restaurantsRouter.get('/:id/menu', async (req, res) => {
+  requireId(req.params.id, 'Restaurant ID');
+
+  const db = await getDb();
+  const menu = await db
+    .collection('Menus')
+    .findOne({ restaurantId: req.params.id }, { projection: { _id: 0 } });
+
+  if (!menu) throw notFound('The menu for that restaurant');
+  res.json(menu);
 });
