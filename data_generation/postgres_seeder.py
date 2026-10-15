@@ -36,6 +36,8 @@ from decimal import Decimal
 import psycopg2
 from psycopg2.extras import execute_batch, execute_values
 
+from restaurant_names import names_by_id
+
 
 def get_connection():
 
@@ -191,6 +193,14 @@ def seed_database(
 
         restaurants = []
 
+        # Realistic names (restaurant_names.py), assigned in id order so a
+        # later seed run finds nothing to rename.
+        new_ids = [
+            str(uuid.uuid4())
+            for _ in range(restaurants_count)
+        ]
+        names = names_by_id(new_ids)
+
         for i in range(
             restaurants_count
         ):
@@ -208,9 +218,9 @@ def seed_database(
             restaurants.append(
 
                 (
-                    str(uuid.uuid4()),
+                    new_ids[i],
 
-                    f"Restaurant-{i + 1}",
+                    names[new_ids[i]],
 
                     latitude,
 

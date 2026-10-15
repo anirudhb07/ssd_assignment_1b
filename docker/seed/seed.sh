@@ -30,6 +30,12 @@ else
     echo "==> PostgreSQL already has ${users} users, skipping seed"
 fi
 
+# Realistic restaurant names: renames restaurants seeded before the names
+# were added, updates the Mongo menus to match, refreshes the summary view.
+# Changes nothing when the names are already right.
+echo "==> Applying data_generation/restaurant_names.py"
+python3 /work/data_generation/restaurant_names.py
+
 # After seeding (it needs the restaurants), on every run: the three demo
 # customers with fixed ids, put back into their demo state (issue #66).
 echo "==> Applying sql/fixtures/demo_customers.sql"
