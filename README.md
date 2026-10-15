@@ -36,9 +36,9 @@ There is no login. The **Acting as** switcher in the header picks the role for t
 | Order | `/browse/orders/:id` | Dispatcher | **Advance status**: Preparing → Delivering → Delivered, which is how the one-active-order rule is demonstrated |
 | Checkout | `/checkout` | Customer | **Workflow 1** (`sp_execute_checkout`): balance before and after, the new `wallet_audit_logs` row, and friendly messages for not enough money (with **Top up**) and a second active order (with a link to it) |
 | Wallet | `/wallet` | Customer | **Audit trail**: one customer's `wallet_audit_logs`, read-only, with a date filter and the balance after each change |
-| Analytics | `/analytics` | Restaurant manager | **Workflow 2 + materialized view**: 7-day moving average chart, `DENSE_RANK` table, summary numbers with "last refreshed" and **Refresh** _(in review: #63)_ |
+| Analytics | `/analytics` | Restaurant manager | **Workflow 2 + materialized view**: 7-day moving average chart, `DENSE_RANK` table, summary numbers with "last refreshed" and **Refresh** |
 | Map | `/map` | Dispatcher | **Workflow 3** (`$geoNear`): drivers within 5 km of a chosen restaurant, sorted by distance, updated every 5 seconds |
-| Reviews | `/reviews` | Restaurant manager | **Workflow 4** (`$facet`): rating distribution, top tags, average rating, and the restaurant's menu document _(in progress: #24)_ |
+| Reviews | `/reviews` | Restaurant manager | **Workflow 4** (`$facet`): rating distribution, top tags, average rating, and the restaurant's menu document |
 
 Every screen has loading, empty and error states and works at phone width.
 
@@ -46,16 +46,26 @@ Every screen has loading, empty and error states and works at phone width.
 
 A walk through all four workflows on the seeded data, in about five minutes. Start the app with `docker compose up -d` and check that `ping-simulator` is running (`docker compose ps`), or the map has no drivers.
 
+Three **demo customers** with fixed ids are added by every seed run, so the checkout outcomes are one click away. Search "Demo" in the **Acting as** picker; they also head **Browse → Users**.
+
+| Customer | Starts with | At checkout |
+| --- | --- | --- |
+| Demo - plenty of money | ₹5,000, no order in progress | Succeeds |
+| Demo - low balance | ₹45 (every menu item costs more) | Not enough money, with **Top up** |
+| Demo - order in progress | One Preparing order | Refused, with **View active order** |
+
+Using them changes them. To put all three back, run `docker compose run --rm seed`, or `CALL sp_reset_demo_customers();` in psql.
+
 1. **Home** (http://localhost:5173): the status bar shows the API, PostgreSQL and MongoDB connected.
 2. **Browse:** open **Orders**. It shows one page of the 120,000 orders; filter **Status: Preparing**, then open **Users** and search for a name.
-3. **Second order blocked (partial unique index):** in the header choose **Acting as: Customer** and pick a customer with a few thousand rupees (**Browse → Users** shows balances). Most seeded customers, about 9 in 10, already have an order in progress. On **Checkout**, press **View menu** on a restaurant, add two items and an add-on, and press **Place order**: it is refused with "This customer already has an order in progress…" and a **View active order** link.
-4. **Advance the order:** follow **View active order** and press **Advance status** twice (Delivering, then Delivered).
-5. **Place an order (Workflow 1):** back on **Checkout**, place the same order. Now it goes through: the result shows the balance before and after and the new DEBIT row written by the audit trigger. Try once more and it is refused again, because this new order is in progress.
-6. **Not enough money:** switch to a customer with a small balance (over 800 seeded customers have under ₹500). If their page under **Browse → Users** shows an order in progress, press **Advance status** there until it is delivered. Build a cart that costs more than their balance: Checkout explains the shortfall and offers **Top up**; top up, then **Place order** succeeds.
-7. **Wallet (audit trail):** open **Wallet**. It shows the customer you are acting as, newest first: the debit and the top-up from step 6, each with the balance after it. Use its customer picker to see the step-5 customer's debit, and set **From** and **To** to narrow it to today.
-8. **Analytics (Workflow 2):** open **Analytics**, press **Refresh** and watch "last refreshed" change; click a restaurant in the ranking to switch the chart _(in review: #63)_.
+3. **Place an order (Workflow 1):** in the header choose **Acting as: Customer** and pick **Demo - plenty of money**. On **Checkout**, press **View menu** on a restaurant, add two items and an add-on, and press **Place order**. The result shows the balance before and after and the new DEBIT row written by the audit trigger. Try once more and it is refused, because this order is now in progress.
+4. **Second order blocked (partial unique index):** switch to **Demo - order in progress** and place any order. It is refused with "This customer already has an order in progress…" and a **View active order** link.
+5. **Advance the order:** follow **View active order** and press **Advance status** twice (Delivering, then Delivered). Back on **Checkout**, the same customer can now order.
+6. **Not enough money:** switch to **Demo - low balance** (₹45) and add any item. Checkout explains the shortfall and offers **Top up**; top up, then **Place order** succeeds.
+7. **Wallet (audit trail):** open **Wallet**. It shows the customer you are acting as, newest first: the top-up and the debit from step 6, each with the balance after it. Use its customer picker to see the others, and set **From** and **To** to narrow it to today.
+8. **Analytics (Workflow 2):** open **Analytics**, press **Refresh** and watch "last refreshed" change; click a restaurant in the ranking to switch the chart.
 9. **Map (Workflow 3):** open **Map** and choose a restaurant. Drivers within 5 km appear on the map and in the list, nearest first; wait a few seconds and their positions and times update.
-10. **Reviews (Workflow 4):** open **Reviews** for the rating chart, top tags, the average rating and the menu _(in progress: #24)_.
+10. **Reviews (Workflow 4):** open **Reviews** for the rating chart, top tags, the average rating and the menu.
 
 Shortcut: on a restaurant's page (**Browse → Restaurants →** a restaurant), **Menu & reviews** and **Analytics** open those screens for that restaurant.
 
@@ -76,6 +86,7 @@ The API tests run against the seeded databases, and the web tests run the screen
 | Analytics | `api/tests/analytics.test.js` | `DENSE_RANK` ties share a rank; the average covers 7 calendar days even when a restaurant has gaps; **Refresh** moves "last refreshed" forward |
 | Map | `api/tests/drivers.test.js`, `MapPage.test.jsx` | Drivers sorted by distance, all within 5 km, one per driver; a driver whose newest ping is inactive or outside the circle is not shown; the screen polls every 5 seconds |
 | Reviews and menus | `api/tests/api.test.js`, `api/tests/menu.test.js` | All five rating buckets from `$facet`; every restaurant has its own menu; 404 and 400 for a missing or malformed id |
+| Demo customers | `api/tests/demo_customers.test.js` | The three demo customers start in their demo state, each gets its checkout outcome (success, not enough money, order in progress), and a reset after a demo puts them back with their wallet history still adding up |
 | Loading, empty, error | `web/src/components/ui/QueryState.test.jsx` and each page's tests | Every state renders, and errors offer **Try again** |
 
 ## Performance
@@ -440,6 +451,7 @@ ssd_assignment_1b/
 | Mongo menus and reviews linked to Postgres (issue #5) | `data_generation/mongo_seeder.py` | The seeder invented random restaurant IDs, so none of the 500 menus or 10,000 reviews belonged to a real restaurant, and reviews pointed to orders that did not exist. It now reads restaurants and `DELIVERED` orders from Postgres: one menu per restaurant, and one review per delivered order with that order's user and restaurant. After pulling, clear the Mongo collections (`deleteMany`) and run the seed again. |
 | MongoDB performance evidence recaptured (issue #57) | `performance/mongo_execution_stats.json`, `performance/capture_mongo_stats.js` | The inherited file held one explain, for Workflow 4 on the original random data, and nothing for Workflow 3. The script runs the current pipelines from `mongo/02` and `mongo/03` with `explain("executionStats")` and adds a short summary of each: the driver query's first step uses `idx_driver_createdAt_ttl`, `$geoNear` uses `idx_driver_location_2dsphere`, and one restaurant's review facets use `idx_review_restaurant_created` (33 documents read instead of all 10,000). Captured on the seeded data with the ping simulator running. To recapture (same in bash and PowerShell): `docker compose cp performance/capture_mongo_stats.js mongo:/tmp/capture_mongo_stats.js`, then `docker compose exec -T mongo sh -c "mongosh --quiet bitestream --file /tmp/capture_mongo_stats.js > /tmp/mongo_execution_stats.json"`, then `docker compose cp mongo:/tmp/mongo_execution_stats.json performance/mongo_execution_stats.json` |
 | PostgreSQL query plans recaptured (issue #67) | `performance/postgres_explain_analyzes.txt`, `performance/capture_postgres_plans.sql` | The inherited file held one plan, the Workflow 2 report doing a full scan of `orders`, and nothing for the queries the app runs. The script runs `EXPLAIN (ANALYZE, BUFFERS)` on the API's own SQL for each screen, with real ids, and every read of the large tables (orders, wallet history, the summary view by restaurant) uses an index; the only full scans are of two 500-row tables (restaurants in a join, and the summary view for the ranking) and the inherited all-restaurants report (see [Performance](#performance)). To recapture (same in bash and PowerShell): `docker compose cp performance/capture_postgres_plans.sql postgres:/tmp/capture_postgres_plans.sql`, then `docker compose exec -T postgres sh -c "psql -X -q -U postgres -d bitestream -f /tmp/capture_postgres_plans.sql > /tmp/postgres_explain_analyzes.txt"`, then `docker compose cp postgres:/tmp/postgres_explain_analyzes.txt performance/postgres_explain_analyzes.txt` |
+| Demo customers with fixed ids (issue #66) | `sql/fixtures/demo_customers.sql`, `docker/seed/seed.sh`, `api/tests/demo_customers.test.js` | Most seeded customers already have an order in progress and every id changes on reseed, so the checkout outcomes were hard to show on demand. Three customers ("Demo - plenty of money", "Demo - low balance", "Demo - order in progress") are created with the real procedures, so their orders and wallet history are like any other's. `seed.sh` applies the file after seeding, on every run, which also puts them back into their demo state; `CALL sp_reset_demo_customers();` does the same by hand. |
 | _Whoever makes a fix: add it here_ | | |
 
 ## Contribution
