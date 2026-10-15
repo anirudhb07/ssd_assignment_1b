@@ -7,8 +7,8 @@ Assignment 2 adds a **web front end** and a small **API layer** on top of the As
 ## Repository
 
 - **GitHub repository:** https://github.com/anirudhb07/ssd_assignment_1b
-- **Final submission commit:** _TODO before submitting_
-- **Demo video:** _TODO_
+- **Final submission commit:** `5beba56f75059c08660c063d8222d884fa9667e1`
+- **Demo video:** https://drive.google.com/drive/folders/1or-DrH44JtAE_lCXGMWl02D5QrqtD95e?usp=drive_link
 - **Inherited from:** https://github.com/charmin-v/ssd_assignment_1 (Assignment 1 final commit `7022714778d3a1a8e6a39a619c7cdabc642db7e9`)
 
 ## Documents
