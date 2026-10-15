@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { advanceOrder, getUser, listOrders } from '../api/endpoints.js';
-import { Button, Card, DetailList, PageHeader, QueryState, Stat, StatusBadge } from '../components/ui/index.js';
+import { Button, Card, DataTable, DetailList, PageHeader, QueryState, Stat, StatusBadge } from '../components/ui/index.js';
 import { formatDateTime, formatMoney } from '../lib/format.js';
 
 const NEXT_STATUS = { PREPARING: 'Delivering', DELIVERING: 'Delivered' };
@@ -29,8 +29,8 @@ function Customer({ user }) {
 
   // GET /users/:id has no order count; a one-row page of their orders does.
   const orders = useQuery({
-    queryKey: ['orders', { userId: user.id, pageSize: 1 }],
-    queryFn: () => listOrders({ userId: user.id, pageSize: 1 }),
+    queryKey: ['orders', { userId: user.id, pageSize: 5 }],
+    queryFn: () => listOrders({ userId: user.id, pageSize: 5 }),
   });
 
   // Returning the refetch keeps the mutation pending (button disabled) until
@@ -75,6 +75,23 @@ function Customer({ user }) {
           />
         </Card>
       )}
+
+      {/* The newest orders; "View orders" below lists them all. */}
+      <Card title="Recent orders">
+        <QueryState query={orders} isEmpty={(d) => d.items.length === 0} emptyTitle="No orders yet" loadingLabel="Loading orders…">
+          {(data) => (
+            <DataTable
+              columns={[
+                { key: 'createdAt', header: 'Placed', render: (o) => formatDateTime(o.createdAt) },
+                { key: 'restaurantName', header: 'Restaurant', render: (o) => <Link to={`/browse/restaurants/${o.restaurantId}`}>{o.restaurantName}</Link> },
+                { key: 'totalAmount', header: 'Amount', numeric: true, render: (o) => formatMoney(o.totalAmount) },
+                { key: 'status', header: 'Status', render: (o) => <Link to={`/browse/orders/${o.id}`}><StatusBadge status={o.status} /></Link> },
+              ]}
+              rows={data.items}
+            />
+          )}
+        </QueryState>
+      </Card>
 
       {/* API errors appear above the buttons, worded for the user already. */}
       {advance.isError && <div className="alert alert--error" role="alert">{advance.error.message}</div>}

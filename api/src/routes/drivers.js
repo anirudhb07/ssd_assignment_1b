@@ -27,6 +27,9 @@ driversRouter.get('/nearby', async (req, res) => {
     if (!Number.isFinite(parsed) || parsed <= 0) {
       throw badRequest('radius must be a positive number.');
     }
+    if (parsed > 50000) {
+      throw badRequest('radius can be at most 50000 metres (50 km).');
+    }
     radiusMeters = parsed;
   }
 
