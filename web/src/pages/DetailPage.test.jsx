@@ -16,6 +16,14 @@ vi.mock('../api/endpoints.js', () => ({
   advanceOrder: vi.fn(),
 }));
 
+// jsdom can't draw a Leaflet map, so stand-ins record what the page passes in.
+vi.mock('react-leaflet', () => ({
+  MapContainer: ({ center, children }) => <div data-testid="map" data-center={JSON.stringify(center)}>{children}</div>,
+  TileLayer: () => null,
+  CircleMarker: ({ center, children }) => <div data-testid="map-marker" data-center={JSON.stringify(center)}>{children}</div>,
+  Tooltip: ({ children }) => <span>{children}</span>,
+}));
+
 const restaurant = {
   id: 'r1', name: 'Restaurant-166', latitude: 12.93944, longitude: 77.69876,
   summary: { completedOrderCount: 240, completedRevenue: 354950 },
@@ -51,13 +59,23 @@ beforeEach(() => {
 });
 
 describe('Restaurant page', () => {
-  it('shows the totals from the summary view and the location', async () => {
+  it('shows the totals from the summary view', async () => {
     renderAt('/browse/restaurants/r1');
     expect(await screen.findByRole('heading', { name: 'Restaurant-166' })).toBeInTheDocument();
     expect(statValue('Completed orders')).toHaveTextContent('240');
     expect(statValue('Completed revenue')).toHaveTextContent('₹3,54,950');
-    expect(statValue('Location')).toHaveTextContent('12.9394, 77.6988');
     expect(getRestaurant).toHaveBeenCalledWith('r1');
+  });
+
+  // Issue #59: a small map instead of raw coordinates, which stay as a caption.
+  it('shows its location on a map, with the coordinates underneath', async () => {
+    renderAt('/browse/restaurants/r1');
+    const card = (await screen.findByRole('heading', { name: 'Location' })).closest('.card');
+    const point = JSON.stringify([12.93944, 77.69876]);
+    expect(within(card).getByTestId('map')).toHaveAttribute('data-center', point);
+    expect(within(card).getByTestId('map-marker')).toHaveAttribute('data-center', point);
+    expect(within(card).getByTestId('map-marker')).toHaveTextContent('Restaurant-166');
+    expect(within(card).getByText('12.9394, 77.6988')).toBeInTheDocument();
   });
 
   it('links to its orders, menu and reviews, and analytics', async () => {

@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { getRestaurant } from '../api/endpoints.js';
+import { LocationMap } from '../components/LocationMap.jsx';
 import { Card, DetailList, PageHeader, QueryState, Stat } from '../components/ui/index.js';
 import { formatMoney } from '../lib/format.js';
 
@@ -28,8 +29,10 @@ function Restaurant({ restaurant }) {
       <div className="grid-cards">
         <Card><Stat label="Completed orders" value={summary.completedOrderCount.toLocaleString('en-IN')} /></Card>
         <Card><Stat label="Completed revenue" value={formatMoney(summary.completedRevenue)} /></Card>
-        <Card><Stat label="Location" value={`${latitude.toFixed(4)}, ${longitude.toFixed(4)}`} /></Card>
       </div>
+      <Card title="Location">
+        <LocationMap latitude={latitude} longitude={longitude} label={name} />
+      </Card>
       <Card title="Details">
         <DetailList
           items={[
