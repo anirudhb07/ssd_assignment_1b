@@ -78,6 +78,27 @@ The API tests run against the seeded databases, and the web tests run the screen
 | Reviews and menus | `api/tests/api.test.js`, `api/tests/menu.test.js` | All five rating buckets from `$facet`; every restaurant has its own menu; 404 and 400 for a missing or malformed id |
 | Loading, empty, error | `web/src/components/ui/QueryState.test.jsx` and each page's tests | Every state renders, and errors offer **Try again** |
 
+## Performance
+
+Captured on the seeded data (10,000 customers, 120,000 orders, 500 restaurants, about 460,000 driver pings, 10,000 reviews). The full plans are in [`performance/postgres_explain_analyzes.txt`](performance/postgres_explain_analyzes.txt) and [`performance/mongo_execution_stats.json`](performance/mongo_execution_stats.json); the scripts next to them recapture both.
+
+| Screen and query | Index used | Time |
+| --- | --- | --- |
+| Browse → Orders, newest first | `idx_orders_created_at` | 0.6 ms |
+| Browse → Orders for one customer | `idx_orders_user_id` | 0.9 ms |
+| Browse → Orders by status | `idx_orders_status_created` | 1.1 ms |
+| Customer page: the order in progress | `idx_active_user_order` (the partial unique index) | 0.05 ms |
+| Wallet: one customer's history for a date range | `idx_wallet_audit_user_time` | 3.8 ms |
+| Restaurant page: totals from the materialized view | `idx_restaurant_order_summary_id` | 0.04 ms |
+| Analytics: one restaurant's 7-day average (`fn_restaurant_revenue_trend`) | `idx_orders_delivered_restaurant_date` | 1.1 ms |
+| Analytics: `DENSE_RANK` ranking (`fn_restaurant_revenue_ranking`) | Reads the 500-row materialized view | 0.6 ms |
+| Analytics: last refresh time | `idx_restaurant_summary_refresh_log_time` | 0.03 ms |
+| Inherited Workflow 2 report, all restaurants (`sql/06`) | Full scan of `orders`, as a report over everything must | 156 ms |
+| Map, step 1: latest ping per driver | `idx_driver_createdAt_ttl` | 82 ms |
+| Map, step 2: `$geoNear` within 5 km | `idx_driver_location_2dsphere`, but it reads about 184,000 pings to return 13 drivers, since the index has no time component | 825 ms |
+| Reviews: `$facet` for one restaurant | `idx_review_restaurant_created` (33 documents read) | 1 ms |
+| Reviews: `$facet` for all restaurants | Reads all 10,000 reviews, as a summary of everything must | 38 ms |
+
 ## Development Setup (Docker)
 
 Docker gives every team member the same PostgreSQL, MongoDB, API and web app, with the same seeded data. You don't need PostgreSQL, MongoDB, Python or Node.js on your machine.
@@ -418,6 +439,7 @@ ssd_assignment_1b/
 | Per-restaurant revenue trend (`RANGE` over 6 days), revenue ranking function, refresh log, logging refresh procedure (issue #10) | `sql/09_restaurant_window_and_refresh_log.sql` | The inherited moving average used `ROWS 6 PRECEDING`, which is six rows rather than six days when a restaurant has days with no orders. The trend is now a per-restaurant function, `fn_restaurant_revenue_trend`, using `RANGE INTERVAL '6 days'`, and `fn_restaurant_revenue_ranking()` serves the Analytics screen. `sp_refresh_restaurant_summary()` also writes a row to `restaurant_summary_refresh_log` so the screen can show when the summary was last refreshed. Apply with `docker compose run --rm seed`; no reset needed. |
 | Mongo menus and reviews linked to Postgres (issue #5) | `data_generation/mongo_seeder.py` | The seeder invented random restaurant IDs, so none of the 500 menus or 10,000 reviews belonged to a real restaurant, and reviews pointed to orders that did not exist. It now reads restaurants and `DELIVERED` orders from Postgres: one menu per restaurant, and one review per delivered order with that order's user and restaurant. After pulling, clear the Mongo collections (`deleteMany`) and run the seed again. |
 | MongoDB performance evidence recaptured (issue #57) | `performance/mongo_execution_stats.json`, `performance/capture_mongo_stats.js` | The inherited file held one explain, for Workflow 4 on the original random data, and nothing for Workflow 3. The script runs the current pipelines from `mongo/02` and `mongo/03` with `explain("executionStats")` and adds a short summary of each: the driver query's first step uses `idx_driver_createdAt_ttl`, `$geoNear` uses `idx_driver_location_2dsphere`, and one restaurant's review facets use `idx_review_restaurant_created` (33 documents read instead of all 10,000). Captured on the seeded data with the ping simulator running. To recapture (same in bash and PowerShell): `docker compose cp performance/capture_mongo_stats.js mongo:/tmp/capture_mongo_stats.js`, then `docker compose exec -T mongo sh -c "mongosh --quiet bitestream --file /tmp/capture_mongo_stats.js > /tmp/mongo_execution_stats.json"`, then `docker compose cp mongo:/tmp/mongo_execution_stats.json performance/mongo_execution_stats.json` |
+| PostgreSQL query plans recaptured (issue #67) | `performance/postgres_explain_analyzes.txt`, `performance/capture_postgres_plans.sql` | The inherited file held one plan, the Workflow 2 report doing a full scan of `orders`, and nothing for the queries the app runs. The script runs `EXPLAIN (ANALYZE, BUFFERS)` on the API's own SQL for each screen, with real ids, and every read of the large tables (orders, wallet history, the summary view by restaurant) uses an index; the only full scans are of two 500-row tables (restaurants in a join, and the summary view for the ranking) and the inherited all-restaurants report (see [Performance](#performance)). To recapture (same in bash and PowerShell): `docker compose cp performance/capture_postgres_plans.sql postgres:/tmp/capture_postgres_plans.sql`, then `docker compose exec -T postgres sh -c "psql -X -q -U postgres -d bitestream -f /tmp/capture_postgres_plans.sql > /tmp/postgres_explain_analyzes.txt"`, then `docker compose cp postgres:/tmp/postgres_explain_analyzes.txt performance/postgres_explain_analyzes.txt` |
 | _Whoever makes a fix: add it here_ | | |
 
 ## Contribution

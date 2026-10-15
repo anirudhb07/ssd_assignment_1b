@@ -1,28 +1,301 @@
-                                                                 QUERY PLAN                                                                  
----------------------------------------------------------------------------------------------------------------------------------------------
- WindowAgg  (cost=44153.54..46377.30 rows=111188 width=92) (actual time=133.299..140.741 rows=15097 loops=1)
-   Buffers: shared hit=1491
-   ->  Sort  (cost=44153.54..44431.51 rows=111188 width=60) (actual time=133.292..133.673 rows=15097 loops=1)
-         Sort Key: orders.restaurant_id, ((orders.created_at)::date)
-         Sort Method: quicksort  Memory: 1328kB
-         Buffers: shared hit=1491
-         ->  WindowAgg  (cost=28706.23..30652.02 rows=111188 width=60) (actual time=124.429..129.054 rows=15097 loops=1)
-               Buffers: shared hit=1485
-               ->  Sort  (cost=28706.23..28984.20 rows=111188 width=52) (actual time=124.423..124.851 rows=15097 loops=1)
-                     Sort Key: (sum(orders.total_amount)) DESC
-                     Sort Method: quicksort  Memory: 1210kB
-                     Buffers: shared hit=1485
-                     ->  HashAggregate  (cost=12398.23..15586.20 rows=111188 width=52) (actual time=117.735..120.497 rows=15097 loops=1)
-                           Group Key: orders.restaurant_id, (orders.created_at)::date
-                           Planned Partitions: 8  Batches: 1  Memory Usage: 6673kB
-                           Buffers: shared hit=1482
-                           ->  Seq Scan on orders  (cost=0.00..3259.97 rows=111188 width=25) (actual time=0.051..63.456 rows=110965 loops=1)
-                                 Filter: ((status)::text = 'DELIVERED'::text)
-                                 Rows Removed by Filter: 9035
-                                 Buffers: shared hit=1482
+PostgreSQL query plans for BiteStream (issue #67)
+                                                Run                                                 | users | restaurants | orders | audit_rows 
+----------------------------------------------------------------------------------------------------+-------+-------------+--------+------------
+ Captured 2026-10-15 17:55 IST on PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on x86_64-pc-linux-gnu | 10000 |         500 | 120000 |     130000
+
+
+=== 1. Browse > Orders, newest first (GET /api/orders, page 1). Index: idx_orders_created_at (sql/08_orders_recent_index.sql)
+                                                                         QUERY PLAN                                                                         
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=1.00..4.18 rows=20 width=99) (actual time=0.059..0.184 rows=20 loops=1)
+   Buffers: shared hit=124
+   ->  Nested Loop  (cost=1.00..19084.60 rows=120000 width=99) (actual time=0.058..0.181 rows=20 loops=1)
+         Buffers: shared hit=124
+         ->  Nested Loop  (cost=0.71..15942.75 rows=120000 width=85) (actual time=0.045..0.123 rows=20 loops=1)
+               Buffers: shared hit=64
+               ->  Index Scan using idx_orders_created_at on orders o  (cost=0.42..9505.23 rows=120000 width=71) (actual time=0.020..0.023 rows=20 loops=1)
+                     Buffers: shared hit=4
+               ->  Memoize  (cost=0.30..0.36 rows=1 width=30) (actual time=0.004..0.005 rows=1 loops=20)
+                     Cache Key: o.user_id
+                     Cache Mode: logical
+                     Hits: 0  Misses: 20  Evictions: 0  Overflows: 0  Memory Usage: 3kB
+                     Buffers: shared hit=60
+                     ->  Index Scan using users_pkey on users u  (cost=0.29..0.35 rows=1 width=30) (actual time=0.004..0.004 rows=1 loops=20)
+                           Index Cond: (id = o.user_id)
+                           Buffers: shared hit=60
+         ->  Memoize  (cost=0.28..0.30 rows=1 width=30) (actual time=0.003..0.003 rows=1 loops=20)
+               Cache Key: o.restaurant_id
+               Cache Mode: logical
+               Hits: 0  Misses: 20  Evictions: 0  Overflows: 0  Memory Usage: 3kB
+               Buffers: shared hit=60
+               ->  Index Scan using restaurants_pkey on restaurants r  (cost=0.27..0.29 rows=1 width=30) (actual time=0.002..0.002 rows=1 loops=20)
+                     Index Cond: (id = o.restaurant_id)
+                     Buffers: shared hit=60
  Planning:
-   Buffers: shared hit=217
- Planning Time: 1.792 ms
- Execution Time: 141.370 ms
-(24 rows)
+   Buffers: shared hit=65
+ Planning Time: 0.587 ms
+ Execution Time: 0.638 ms
+
+
+=== 2. Browse > Orders for one customer (GET /api/orders?userId=). Index: idx_orders_user_id
+                                                                     QUERY PLAN                                                                      
+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=74.22..74.25 rows=12 width=99) (actual time=0.901..0.921 rows=20 loops=1)
+   Buffers: shared hit=40 read=1
+   ->  Sort  (cost=74.22..74.25 rows=12 width=99) (actual time=0.900..0.918 rows=20 loops=1)
+         Sort Key: o.created_at DESC, o.id DESC
+         Sort Method: quicksort  Memory: 28kB
+         Buffers: shared hit=40 read=1
+         ->  Hash Join  (cost=20.92..74.00 rows=12 width=99) (actual time=0.681..0.869 rows=29 loops=1)
+               Hash Cond: (o.restaurant_id = r.id)
+               Buffers: shared hit=37 read=1
+               ->  Nested Loop  (cost=4.67..57.72 rows=12 width=85) (actual time=0.530..0.708 rows=29 loops=1)
+                     Buffers: shared hit=32 read=1
+                     ->  Index Scan using users_pkey on users u  (cost=0.29..8.30 rows=1 width=30) (actual time=0.017..0.018 rows=1 loops=1)
+                           Index Cond: (id = 'c591e0dd-43d5-4439-b275-efb66c02bd12'::uuid)
+                           Buffers: shared hit=3
+                     ->  Bitmap Heap Scan on orders o  (cost=4.39..49.30 rows=12 width=71) (actual time=0.509..0.678 rows=29 loops=1)
+                           Recheck Cond: (user_id = 'c591e0dd-43d5-4439-b275-efb66c02bd12'::uuid)
+                           Heap Blocks: exact=28
+                           Buffers: shared hit=29 read=1
+                           ->  Bitmap Index Scan on idx_orders_user_id  (cost=0.00..4.38 rows=12 width=0) (actual time=0.494..0.495 rows=29 loops=1)
+                                 Index Cond: (user_id = 'c591e0dd-43d5-4439-b275-efb66c02bd12'::uuid)
+                                 Buffers: shared hit=1 read=1
+               ->  Hash  (cost=10.00..10.00 rows=500 width=30) (actual time=0.145..0.145 rows=500 loops=1)
+                     Buckets: 1024  Batches: 1  Memory Usage: 39kB
+                     Buffers: shared hit=5
+                     ->  Seq Scan on restaurants r  (cost=0.00..10.00 rows=500 width=30) (actual time=0.006..0.061 rows=500 loops=1)
+                           Buffers: shared hit=5
+ Planning:
+   Buffers: shared hit=12
+ Planning Time: 0.248 ms
+ Execution Time: 0.947 ms
+
+
+=== 3. Browse > Orders filtered by status (GET /api/orders?status=PREPARING)
+                                                                                 QUERY PLAN                                                                                  
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=3.32..50.75 rows=20 width=99) (actual time=1.091..1.095 rows=20 loops=1)
+   Buffers: shared hit=133 read=3
+   ->  Incremental Sort  (cost=3.32..11101.20 rows=4680 width=99) (actual time=1.090..1.092 rows=20 loops=1)
+         Sort Key: o.created_at DESC, o.id DESC
+         Presorted Key: o.created_at
+         Full-sort Groups: 1  Sort Method: quicksort  Average Memory: 27kB  Peak Memory: 27kB
+         Buffers: shared hit=133 read=3
+         ->  Nested Loop  (cost=0.99..10890.74 rows=4680 width=99) (actual time=0.941..1.070 rows=21 loops=1)
+               Buffers: shared hit=130 read=3
+               ->  Nested Loop  (cost=0.70..10624.36 rows=4680 width=85) (actual time=0.929..1.016 rows=21 loops=1)
+                     Buffers: shared hit=70 read=3
+                     ->  Index Scan Backward using idx_orders_status_created on orders o  (cost=0.42..3728.66 rows=4680 width=71) (actual time=0.919..0.931 rows=21 loops=1)
+                           Index Cond: ((status)::text = 'PREPARING'::text)
+                           Buffers: shared hit=7 read=3
+                     ->  Index Scan using users_pkey on users u  (cost=0.29..1.47 rows=1 width=30) (actual time=0.003..0.003 rows=1 loops=21)
+                           Index Cond: (id = o.user_id)
+                           Buffers: shared hit=63
+               ->  Memoize  (cost=0.28..0.31 rows=1 width=30) (actual time=0.002..0.002 rows=1 loops=21)
+                     Cache Key: o.restaurant_id
+                     Cache Mode: logical
+                     Hits: 1  Misses: 20  Evictions: 0  Overflows: 0  Memory Usage: 3kB
+                     Buffers: shared hit=60
+                     ->  Index Scan using restaurants_pkey on restaurants r  (cost=0.27..0.30 rows=1 width=30) (actual time=0.002..0.002 rows=1 loops=20)
+                           Index Cond: (id = o.restaurant_id)
+                           Buffers: shared hit=60
+ Planning:
+   Buffers: shared hit=24
+ Planning Time: 0.362 ms
+ Execution Time: 1.134 ms
+
+
+=== 4. Customer page: the order in progress (GET /api/users/:id). Index: idx_active_user_order (the partial unique index)
+                                                                    QUERY PLAN                                                                     
+---------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.84..24.94 rows=1 width=99) (actual time=0.033..0.034 rows=1 loops=1)
+   Buffers: shared hit=9
+   ->  Nested Loop  (cost=0.84..24.94 rows=1 width=99) (actual time=0.033..0.033 rows=1 loops=1)
+         Buffers: shared hit=9
+         ->  Nested Loop  (cost=0.57..16.62 rows=1 width=85) (actual time=0.029..0.030 rows=1 loops=1)
+               Buffers: shared hit=6
+               ->  Index Scan using idx_active_user_order on orders o  (cost=0.29..8.30 rows=1 width=71) (actual time=0.015..0.015 rows=1 loops=1)
+                     Index Cond: (user_id = '0019b7ea-a061-48a5-9aa5-31d87e7bce03'::uuid)
+                     Buffers: shared hit=3
+               ->  Index Scan using users_pkey on users u  (cost=0.29..8.30 rows=1 width=30) (actual time=0.013..0.013 rows=1 loops=1)
+                     Index Cond: (id = '0019b7ea-a061-48a5-9aa5-31d87e7bce03'::uuid)
+                     Buffers: shared hit=3
+         ->  Index Scan using restaurants_pkey on restaurants r  (cost=0.27..8.29 rows=1 width=30) (actual time=0.002..0.002 rows=1 loops=1)
+               Index Cond: (id = o.restaurant_id)
+               Buffers: shared hit=3
+ Planning:
+   Buffers: shared hit=12
+ Planning Time: 0.208 ms
+ Execution Time: 0.049 ms
+
+
+=== 5. Wallet: one customer's history for a date range, newest first (GET /api/users/:id/audit?from=&to=). Index: idx_wallet_audit_user_time
+                                                                                                               QUERY PLAN                                                                                                                
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=27.57..27.59 rows=6 width=49) (actual time=3.814..3.818 rows=16 loops=1)
+   Buffers: shared hit=3 read=15
+   ->  Sort  (cost=27.57..27.59 rows=6 width=49) (actual time=3.814..3.815 rows=16 loops=1)
+         Sort Key: changed_at DESC, seq DESC
+         Sort Method: quicksort  Memory: 27kB
+         Buffers: shared hit=3 read=15
+         ->  Bitmap Heap Scan on wallet_audit_logs  (cost=4.49..27.49 rows=6 width=49) (actual time=0.911..3.792 rows=16 loops=1)
+               Recheck Cond: ((user_id = 'c591e0dd-43d5-4439-b275-efb66c02bd12'::uuid) AND (changed_at >= '2026-09-30 18:30:00+00'::timestamp with time zone) AND (changed_at < '2026-10-15 18:30:00+00'::timestamp with time zone))
+               Heap Blocks: exact=15
+               Buffers: shared hit=3 read=15
+               ->  Bitmap Index Scan on idx_wallet_audit_user_time  (cost=0.00..4.49 rows=6 width=0) (actual time=0.563..0.563 rows=16 loops=1)
+                     Index Cond: ((user_id = 'c591e0dd-43d5-4439-b275-efb66c02bd12'::uuid) AND (changed_at >= '2026-09-30 18:30:00+00'::timestamp with time zone) AND (changed_at < '2026-10-15 18:30:00+00'::timestamp with time zone))
+                     Buffers: shared hit=1 read=2
+ Planning:
+   Buffers: shared hit=23
+ Planning Time: 0.133 ms
+ Execution Time: 3.835 ms
+
+
+=== 6. Restaurant page: totals from the materialized view (GET /api/restaurants/:id). Index: idx_restaurant_order_summary_id
+                                                                            QUERY PLAN                                                                             
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Nested Loop Left Join  (cost=0.55..16.59 rows=1 width=61) (actual time=0.029..0.030 rows=1 loops=1)
+   Buffers: shared hit=5 read=1
+   ->  Index Scan using restaurants_pkey on restaurants r  (cost=0.27..8.29 rows=1 width=46) (actual time=0.004..0.005 rows=1 loops=1)
+         Index Cond: (id = '7e6c93a3-26d1-4028-8b0b-d6f090c5b0a0'::uuid)
+         Buffers: shared hit=3
+   ->  Index Scan using idx_restaurant_order_summary_id on restaurant_order_summary s  (cost=0.27..8.29 rows=1 width=31) (actual time=0.023..0.023 rows=1 loops=1)
+         Index Cond: (restaurant_id = '7e6c93a3-26d1-4028-8b0b-d6f090c5b0a0'::uuid)
+         Buffers: shared hit=2 read=1
+ Planning:
+   Buffers: shared hit=9
+ Planning Time: 0.097 ms
+ Execution Time: 0.041 ms
+
+
+=== 7. Analytics: one restaurant's daily revenue and 7-day average (GET /api/analytics/revenue). fn_restaurant_revenue_trend (sql/09), inlined; index: idx_orders_delivered_restaurant_date
+                                                                                   QUERY PLAN                                                                                   
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Subquery Scan on fn_restaurant_revenue_trend  (cost=611.40..625.09 rows=219 width=68) (actual time=0.960..1.074 rows=31 loops=1)
+   Buffers: shared hit=222
+   ->  WindowAgg  (cost=611.40..622.90 rows=219 width=76) (actual time=0.959..1.069 rows=31 loops=1)
+         Buffers: shared hit=222
+         ->  Subquery Scan on d  (cost=611.40..619.06 rows=219 width=22) (actual time=0.945..1.013 rows=31 loops=1)
+               Buffers: shared hit=222
+               ->  GroupAggregate  (cost=611.40..616.87 rows=219 width=30) (actual time=0.945..1.009 rows=31 loops=1)
+                     Group Key: (date(o.created_at))
+                     Buffers: shared hit=222
+                     ->  Sort  (cost=611.40..611.95 rows=219 width=9) (actual time=0.936..0.950 rows=240 loops=1)
+                           Sort Key: (date(o.created_at))
+                           Sort Method: quicksort  Memory: 34kB
+                           Buffers: shared hit=222
+                           ->  Bitmap Heap Scan on orders o  (cost=10.11..602.89 rows=219 width=9) (actual time=0.074..0.893 rows=240 loops=1)
+                                 Recheck Cond: ((restaurant_id = '7e6c93a3-26d1-4028-8b0b-d6f090c5b0a0'::uuid) AND ((status)::text = 'DELIVERED'::text))
+                                 Heap Blocks: exact=218
+                                 Buffers: shared hit=222
+                                 ->  Bitmap Index Scan on idx_orders_delivered_restaurant_date  (cost=0.00..10.06 rows=219 width=0) (actual time=0.041..0.041 rows=240 loops=1)
+                                       Index Cond: (restaurant_id = '7e6c93a3-26d1-4028-8b0b-d6f090c5b0a0'::uuid)
+                                       Buffers: shared hit=4
+ Planning:
+   Buffers: shared hit=60
+ Planning Time: 0.425 ms
+ Execution Time: 1.122 ms
+
+
+=== 8. Analytics: DENSE_RANK ranking, page 1 (GET /api/analytics/ranking). fn_restaurant_revenue_ranking (sql/09) reads the 500-row materialized view
+                                                                          QUERY PLAN                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=69.13..69.92 rows=20 width=84) (actual time=0.609..0.613 rows=20 loops=1)
+   Buffers: shared hit=17
+   ->  Incremental Sort  (cost=69.13..88.88 rows=500 width=84) (actual time=0.608..0.610 rows=20 loops=1)
+         Sort Key: "*SELECT*".revenue_rank, "*SELECT*".restaurant_name, "*SELECT*".restaurant_id
+         Presorted Key: "*SELECT*".revenue_rank, "*SELECT*".restaurant_name
+         Full-sort Groups: 1  Sort Method: quicksort  Average Memory: 26kB  Peak Memory: 26kB
+         Buffers: shared hit=17
+         ->  Subquery Scan on "*SELECT*"  (cost=69.08..75.33 rows=500 width=84) (actual time=0.585..0.590 rows=21 loops=1)
+               Buffers: shared hit=8
+               ->  Sort  (cost=69.08..70.33 rows=500 width=81) (actual time=0.584..0.586 rows=21 loops=1)
+                     Sort Key: ((dense_rank() OVER (?))::integer), ((s.restaurant_name)::text)
+                     Sort Method: quicksort  Memory: 67kB
+                     Buffers: shared hit=8
+                     ->  WindowAgg  (cost=36.66..46.66 rows=500 width=81) (actual time=0.217..0.488 rows=500 loops=1)
+                           Buffers: shared hit=8
+                           ->  Sort  (cost=36.66..37.91 rows=500 width=37) (actual time=0.214..0.244 rows=500 loops=1)
+                                 Sort Key: s.completed_revenue DESC
+                                 Sort Method: quicksort  Memory: 56kB
+                                 Buffers: shared hit=8
+                                 ->  Seq Scan on restaurant_order_summary s  (cost=0.00..14.25 rows=500 width=37) (actual time=0.006..0.079 rows=500 loops=1)
+                                       Filter: (completed_order_count > 0)
+                                       Buffers: shared hit=8
+ Planning:
+   Buffers: shared hit=88
+ Planning Time: 0.244 ms
+ Execution Time: 0.637 ms
+
+
+=== 9. Analytics: last refresh time (GET /api/analytics/summary). Index: idx_restaurant_summary_refresh_log_time
+                                                                                      QUERY PLAN                                                                                      
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.15..0.21 rows=1 width=8) (actual time=0.020..0.020 rows=1 loops=1)
+   Buffers: shared hit=2
+   ->  Index Only Scan using idx_restaurant_summary_refresh_log_time on restaurant_summary_refresh_log  (cost=0.15..63.00 rows=990 width=8) (actual time=0.019..0.020 rows=1 loops=1)
+         Heap Fetches: 1
+         Buffers: shared hit=2
+ Planning:
+   Buffers: shared hit=45
+ Planning Time: 0.133 ms
+ Execution Time: 0.027 ms
+
+
+=== 10. The inherited Workflow 2 report query (sql/06_window_analytics.sql), all restaurants, for comparison
+                                                                              QUERY PLAN                                                                              
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Sort  (cost=51147.21..51416.21 rows=107598 width=96) (actual time=152.752..153.684 rows=15451 loops=1)
+   Sort Key: (dense_rank() OVER (?)), daily_revenue_1.restaurant_id, daily_revenue_1.order_date
+   Sort Method: quicksort  Memory: 1771kB
+   Buffers: shared hit=1487
+   CTE daily_revenue
+     ->  HashAggregate  (cost=12380.28..15780.50 rows=107598 width=38) (actual time=69.642..77.117 rows=15451 loops=1)
+           Group Key: orders.restaurant_id, date(orders.created_at)
+           Planned Partitions: 8  Batches: 1  Memory Usage: 6929kB
+           Buffers: shared hit=1482
+           ->  Seq Scan on orders  (cost=0.00..3259.44 rows=110976 width=25) (actual time=0.006..31.714 rows=110965 loops=1)
+                 Filter: ((status)::text = 'DELIVERED'::text)
+                 Rows Removed by Filter: 9035
+                 Buffers: shared hit=1482
+   ->  Merge Join  (cost=16818.63..20854.56 rows=107598 width=96) (actual time=96.583..139.608 rows=15451 loops=1)
+         Merge Cond: (restaurant_totals.restaurant_id = daily_revenue_1.restaurant_id)
+         Buffers: shared hit=1487
+         ->  Sort  (cost=2730.51..2731.01 rows=200 width=72) (actual time=88.328..88.470 rows=500 loops=1)
+               Sort Key: restaurant_totals.restaurant_id
+               Sort Method: quicksort  Memory: 67kB
+               Buffers: shared hit=1487
+               ->  Hash Join  (cost=2716.84..2722.87 rows=200 width=72) (actual time=87.646..88.128 rows=500 loops=1)
+                     Hash Cond: (restaurant_totals.restaurant_id = r.id)
+                     Buffers: shared hit=1487
+                     ->  WindowAgg  (cost=2700.59..2704.09 rows=200 width=42) (actual time=87.458..87.766 rows=500 loops=1)
+                           Buffers: shared hit=1482
+                           ->  Sort  (cost=2700.59..2701.09 rows=200 width=34) (actual time=87.451..87.488 rows=500 loops=1)
+                                 Sort Key: restaurant_totals.total_revenue DESC
+                                 Sort Method: quicksort  Memory: 48kB
+                                 Buffers: shared hit=1482
+                                 ->  Subquery Scan on restaurant_totals  (cost=2689.95..2692.95 rows=200 width=34) (actual time=87.067..87.282 rows=500 loops=1)
+                                       Buffers: shared hit=1482
+                                       ->  HashAggregate  (cost=2689.95..2692.95 rows=200 width=34) (actual time=87.066..87.225 rows=500 loops=1)
+                                             Group Key: daily_revenue.restaurant_id
+                                             Batches: 1  Memory Usage: 313kB
+                                             Buffers: shared hit=1482
+                                             ->  CTE Scan on daily_revenue  (cost=0.00..2151.96 rows=107598 width=34) (actual time=69.644..82.405 rows=15451 loops=1)
+                                                   Buffers: shared hit=1482
+                     ->  Hash  (cost=10.00..10.00 rows=500 width=30) (actual time=0.158..0.160 rows=500 loops=1)
+                           Buckets: 1024  Batches: 1  Memory Usage: 39kB
+                           Buffers: shared hit=5
+                           ->  Seq Scan on restaurants r  (cost=0.00..10.00 rows=500 width=30) (actual time=0.008..0.064 rows=500 loops=1)
+                                 Buffers: shared hit=5
+         ->  Materialize  (cost=14088.12..16778.07 rows=107598 width=56) (actual time=8.249..46.790 rows=15451 loops=1)
+               ->  WindowAgg  (cost=14088.12..16509.07 rows=107598 width=56) (actual time=8.246..41.401 rows=15451 loops=1)
+                     ->  Sort  (cost=14088.12..14357.11 rows=107598 width=38) (actual time=8.221..11.808 rows=15451 loops=1)
+                           Sort Key: daily_revenue_1.restaurant_id, daily_revenue_1.order_date
+                           Sort Method: quicksort  Memory: 1229kB
+                           ->  CTE Scan on daily_revenue daily_revenue_1  (cost=0.00..2151.96 rows=107598 width=38) (actual time=0.001..1.218 rows=15451 loops=1)
+ Planning:
+   Buffers: shared hit=9
+ Planning Time: 0.502 ms
+ Execution Time: 155.899 ms
 
