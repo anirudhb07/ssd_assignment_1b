@@ -111,6 +111,12 @@ def seed_database(
 
         cursor = connection.cursor()
 
+        # Idempotency check: don't duplicate rows if already seeded
+        cursor.execute("SELECT COUNT(*) FROM users;")
+        existing_users = cursor.fetchone()[0]
+        if existing_users > 0:
+            print(f"PostgreSQL already has {existing_users:,} users. Skipping seed to remain idempotent.")
+            return
 
         # =================================================
         # USERS

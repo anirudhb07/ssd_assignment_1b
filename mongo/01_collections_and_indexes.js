@@ -316,4 +316,15 @@ db.Reviews.createIndex(
 );
 
 
+// Referenced by performance/mongo_execution_stats.json
+db.Reviews.createIndex(
+    {
+        rating: 1
+    },
+    {
+        name: "idx_reviews_rating"
+    }
+);
+
+
 print("BiteStream MongoDB setup completed.");
