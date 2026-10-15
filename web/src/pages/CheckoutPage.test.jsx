@@ -81,6 +81,8 @@ describe('Checkout', () => {
     await add('Paneer Tikka');
     await userEvent.click(screen.getByLabelText(/Extra Cheese/));
     expect(cart().getByText('₹280')).toBeInTheDocument();
+    await submit();
+    expect(checkout).toHaveBeenCalledWith({ userId: 'u1', restaurantId: 'r1', amount: 280 });
   });
 
   it('shows loading, then an empty menu', async () => {
@@ -129,6 +131,7 @@ describe('Checkout', () => {
     expect(screen.getByText('order-real')).toBeInTheDocument();
     expect(screen.getByText('audit-debit')).toBeInTheDocument();
     expect(screen.getByText('Debit')).toBeInTheDocument();
+    expect(screen.getByText('Preparing')).toBeInTheDocument();
     expect(screen.getByText('₹100')).toBeInTheDocument();
     expect(screen.getAllByText('₹99.70')).toHaveLength(2);
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['users'] });
@@ -180,6 +183,9 @@ describe('Checkout', () => {
     expect(screen.getByRole('button', { name: 'Topping up…' })).toBeDisabled();
     await act(async () => pending.resolve(credit));
     expect(await screen.findByText(/Top-up successful/)).toBeInTheDocument();
+    expect(screen.getByText(/Top-up successful/)).toHaveTextContent('Wallet balance: ₹200');
+    expect(cart().getByText('Meal')).toBeInTheDocument();
+    expect(cart().getByText('Subtotal: ₹5,001')).toBeInTheDocument();
     expect(screen.queryByText('Not enough funds. Please top up.')).not.toBeInTheDocument();
     expect(screen.getByText('audit-credit')).toBeInTheDocument();
     expect(topUpWallet).toHaveBeenCalledWith('u1', 100);
@@ -200,6 +206,11 @@ describe('Checkout', () => {
     const link = await screen.findByRole('link', { name: 'View active order' });
     expect(link).toHaveAttribute('href', '/browse/orders/active-42');
     expect(checkout).toHaveBeenCalledWith({ userId: 'u1', restaurantId: 'r1', amount: 0.1 });
+    expect(screen.queryByText(/Order confirmed/)).not.toBeInTheDocument();
+    expect(screen.queryByText('audit-debit')).not.toBeInTheDocument();
+    expect(screen.queryByText('Debit')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'View order' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Place order' })).toBeEnabled();
     await userEvent.click(link);
     expect(await screen.findByRole('button', { name: 'Advance status' })).toBeEnabled();
     expect(getOrder).toHaveBeenCalledWith('active-42');
@@ -241,6 +252,44 @@ describe('Checkout', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Confirm top up' }));
     expect(await screen.findByText('Wallet service unavailable')).toBeInTheDocument();
     expect(checkout).toHaveBeenCalledTimes(1);
+  });
+
+  it('recovers from an active-order conflict by manually retrying the preserved cart', async () => {
+    checkout.mockRejectedValueOnce(new ApiError(409, 'ACTIVE_ORDER_EXISTS', 'Finish your current order first.')).mockResolvedValue(success);
+    getUser.mockResolvedValue({ id: 'u1', name: 'Customer One', walletBalance: 100, activeOrder: { id: 'active-42' } });
+    setup(); await choose(); await add(); await submit();
+    expect(await screen.findByRole('alert')).toHaveTextContent('Finish your current order first.');
+    expect(cart().getByText('Tea')).toBeInTheDocument();
+    expect(checkout).toHaveBeenCalledTimes(1);
+    // The order is delivered elsewhere; retry remains an explicit user action.
+    getUser.mockResolvedValue({ id: 'u1', name: 'Customer One', walletBalance: 100, activeOrder: null });
+    await submit();
+    expect(await screen.findByText(/Order confirmed/)).toBeInTheDocument();
+    expect(checkout).toHaveBeenCalledTimes(2);
+    expect(checkout).toHaveBeenLastCalledWith({ userId: 'u1', restaurantId: 'r1', amount: 0.1 });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'View active order' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the conflict recoverable when the refreshed customer has no active order', async () => {
+    checkout.mockRejectedValue(new ApiError(409, 'ACTIVE_ORDER_EXISTS', 'Finish your current order first.'));
+    setup(); await choose(); await add(); await submit();
+    expect(await screen.findByText('No active order was found. You can try placing your order again.')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'View active order' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Place order' })).toBeEnabled();
+    expect(screen.queryByText(/Order confirmed/)).not.toBeInTheDocument();
+  });
+
+  it('shows a customer lookup error instead of inventing an active-order link', async () => {
+    checkout.mockRejectedValue(new ApiError(409, 'ACTIVE_ORDER_EXISTS', 'Finish your current order first.'));
+    setup(); await choose(); await add();
+    getUser.mockRejectedValue(new Error('Customer lookup unavailable'));
+    await submit();
+    expect(await screen.findByText('Finish your current order first.')).toBeInTheDocument();
+    expect(screen.getAllByText('Customer lookup unavailable').length).toBeGreaterThan(0);
+    expect(screen.queryByRole('link', { name: 'View active order' })).not.toBeInTheDocument();
+    expect(screen.queryByText('audit-debit')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Place order' })).toBeDisabled();
   });
 });
 
