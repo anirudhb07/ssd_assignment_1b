@@ -40,23 +40,27 @@ it('keeps all navigation routes, active highlight, role selector and navigation 
   expect(nav.getByRole('link', { name: 'Reviews' })).toHaveClass('active');
 });
 
-it('selects a matching customer after searching', async () => {
-  listUsers.mockImplementation(async ({ search }) => search ? page([bob], '1') : page([alice, bob]));
+it('requires manual customer selection even for an exact name with one match', async () => {
+  listUsers.mockImplementation(async ({ search }) => search ? page([bob], 1) : page([alice, bob]));
   setup();
-  search('Bob');
-  await waitFor(() => expect(actor().user).toEqual(bob));
-  expect(listUsers).toHaveBeenLastCalledWith({ search: 'Bob', pageSize: 20 });
+  search('Bob-22');
+  await waitFor(() => expect(listUsers).toHaveBeenLastCalledWith({ search: 'Bob-22', pageSize: 20 }));
+  await waitFor(() => expect(screen.getByLabelText('Choose a customer')).toBeEnabled());
+  expect(actor().user).toEqual(alice);
+  await userEvent.selectOptions(screen.getByLabelText('Choose a customer'), 'u2');
   expect(screen.getByLabelText('Choose a customer')).toHaveValue('u2');
+  expect(actor().user).toEqual(bob);
 });
 
-it.each([2, 500, undefined])('selects the first match regardless of total count (%s)', async (total) => {
-  listUsers.mockResolvedValue({ items: [bob], total });
+it.each([2, 500, undefined])('does not auto-select a restaurant from one page item with total %s', async (total) => {
+  listRestaurants.mockResolvedValue({ items: [restaurant], total });
   setup();
-  search('22');
-  await waitFor(() => expect(listUsers).toHaveBeenCalledWith({ search: '22', pageSize: 20 }));
-  await waitFor(() => expect(screen.getByLabelText('Choose a customer')).toBeEnabled());
-  await waitFor(() => expect(actor().user).toEqual(bob));
-  expect(screen.getByRole('status')).toBeEmptyDOMElement();
+  await userEvent.selectOptions(screen.getByLabelText('Acting as'), 'manager');
+  search('22', 'restaurant');
+  await waitFor(() => expect(listRestaurants).toHaveBeenCalledWith({ search: '22', pageSize: 20 }));
+  await waitFor(() => expect(screen.getByLabelText('Choose a restaurant')).toBeEnabled());
+  expect(actor().restaurant).toBeNull();
+  expect(screen.queryByRole('status')).not.toBeInTheDocument();
 });
 
 it('allows explicit selection among ambiguous matches and manual clearing', async () => {
@@ -81,15 +85,17 @@ it('preserves selection on empty searches, no matches and API errors, then recov
   await waitFor(() => expect(screen.getByLabelText('Choose a customer')).toBeEnabled());
   expect(actor().user).toEqual(alice);
   search('none');
-  expect(await screen.findByText('No matches. Try another search.')).toBeInTheDocument();
+  expect(await screen.findByRole('option', { name: 'No matches' })).toHaveValue('');
   search('error');
-  expect(await screen.findByText(/Search unavailable/)).toBeInTheDocument();
+  expect(await screen.findByRole('option', { name: "Couldn't load customers" })).toHaveValue('');
   expect(actor().user).toEqual(alice);
   search('');
   await waitFor(() => expect(screen.getByLabelText('Choose a customer')).toBeEnabled());
   expect(actor().user).toEqual(alice);
   search('Bob');
-  await waitFor(() => expect(actor().user).toEqual(bob));
+  await waitFor(() => expect(listUsers).toHaveBeenCalledWith({ search: 'Bob', pageSize: 20 }));
+  await waitFor(() => expect(screen.getByLabelText('Choose a customer')).toBeEnabled());
+  expect(actor().user).toEqual(alice);
 });
 
 it('ignores stale responses and previous placeholder data during a newer search', async () => {
@@ -100,6 +106,8 @@ it('ignores stale responses and previous placeholder data during a newer search'
   search('old');
   await waitFor(() => expect(listUsers).toHaveBeenCalledWith({ search: 'old', pageSize: 20 }));
   expect(screen.getByLabelText('Choose a customer')).toBeDisabled();
+  expect(screen.getByRole('option', { name: 'Loading…' })).toHaveValue('');
+  expect(screen.queryByRole('status')).not.toBeInTheDocument();
   expect(actor().user).toEqual(alice);
   search('new');
   await act(async () => old.resolve(page([bob])));
@@ -154,7 +162,7 @@ it('supports ambiguous restaurant selection, loading and errors without losing t
   await userEvent.selectOptions(screen.getByLabelText('Acting as'), 'manager');
   search('22', 'restaurant');
   await waitFor(() => expect(screen.getByLabelText('Choose a restaurant')).toBeEnabled());
-  await waitFor(() => expect(actor().restaurant).toEqual(restaurant));
+  expect(actor().restaurant).toBeNull();
   await userEvent.selectOptions(screen.getByLabelText('Choose a restaurant'), 'r2');
   expect(actor().restaurant).toEqual(other);
   search('slow', 'restaurant');
@@ -162,7 +170,7 @@ it('supports ambiguous restaurant selection, loading and errors without losing t
   expect(screen.getByLabelText('Choose a restaurant')).toBeDisabled();
   expect(actor().restaurant).toEqual(other);
   search('error', 'restaurant');
-  await screen.findByText(/Restaurant search unavailable/);
+  await screen.findByRole('option', { name: "Couldn't load restaurants" });
   await act(async () => pending.resolve(page([restaurant])));
   expect(actor().restaurant).toEqual(other);
 });
@@ -171,22 +179,40 @@ it('does not auto-select on a background refetch after a search error', async ()
   const client = setup();
   listUsers.mockRejectedValue(new Error('Offline'));
   search('Bob');
-  await screen.findByText(/Offline/);
+  await screen.findByRole('option', { name: "Couldn't load customers" });
   listUsers.mockResolvedValue(page([bob]));
   await act(() => client.invalidateQueries({ queryKey: ['actor-picker'] }));
   expect(actor().user).toEqual(alice);
 });
 
-it('selects the first customer match, then retains a manually chosen match like Map', async () => {
+it('keeps the payer outside User-0 search results until an explicit selection', async () => {
   const third = { id: 'u3', name: 'Charlie-22' };
   listUsers.mockResolvedValue(page([bob, third], 200));
   setup();
-  search('22');
-  await waitFor(() => expect(actor().user).toEqual(bob));
-  expect(screen.getByRole('status')).toBeEmptyDOMElement();
+  search('User-0');
+  await waitFor(() => expect(listUsers).toHaveBeenCalledWith({ search: 'User-0', pageSize: 20 }));
+  await waitFor(() => expect(screen.getByLabelText('Choose a customer')).toBeEnabled());
+  expect(actor().user).toEqual(alice);
+  expect(screen.getByLabelText('Choose a customer')).toHaveValue('u1');
+  expect(screen.queryByRole('status')).not.toBeInTheDocument();
   await userEvent.selectOptions(screen.getByLabelText('Choose a customer'), 'u3');
   search('2');
   await waitFor(() => expect(listUsers).toHaveBeenCalledWith({ search: '2', pageSize: 20 }));
   await waitFor(() => expect(screen.getByLabelText('Choose a customer')).toBeEnabled());
   expect(actor().user).toEqual(third);
+});
+
+it('ignores a late unique restaurant response after a newer ambiguous search', async () => {
+  const old = deferred();
+  const other = { id: 'r2', name: 'Restaurant-123' };
+  listRestaurants.mockImplementation(({ search }) => search === '122' ? old.promise : Promise.resolve(page([restaurant, other])));
+  setup();
+  await userEvent.selectOptions(screen.getByLabelText('Acting as'), 'manager');
+  search('122', 'restaurant');
+  await waitFor(() => expect(listRestaurants).toHaveBeenCalledWith({ search: '122', pageSize: 20 }));
+  search('12', 'restaurant');
+  await waitFor(() => expect(listRestaurants).toHaveBeenCalledWith({ search: '12', pageSize: 20 }));
+  await waitFor(() => expect(screen.getByLabelText('Choose a restaurant')).toBeEnabled());
+  await act(async () => old.resolve(page([restaurant])));
+  expect(actor().restaurant).toBeNull();
 });

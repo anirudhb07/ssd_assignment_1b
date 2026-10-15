@@ -37,9 +37,10 @@ export function SearchPicker({
     }
   }, [ready, autoSelectMatch, search, list.data, list.isError, items, selected?.id, onSelect]);
 
-  // Keep the native select's displayed text stable while results load/change.
-  // Changing option text can resize a native select and make the header wrap.
-  const firstOption = `Choose a ${noun}`;
+  // Feedback stays inside the fixed-width dropdown, keeping the header height stable.
+  const firstOption = searching ? 'Loading…'
+    : list.isError ? `Couldn't load ${noun}s`
+    : items.length ? `Choose a ${noun}` : 'No matches';
 
   return (
     <div className="search-picker">

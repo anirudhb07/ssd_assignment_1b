@@ -59,7 +59,7 @@ beforeEach(() => {
 describe('whose wallet', () => {
   it('asks for a customer when there is none in the link or in Acting as', async () => {
     renderAt('/wallet');
-    expect(await screen.findByText('Choose a customer')).toBeInTheDocument();
+    expect(await screen.findByText('Choose a customer', { selector: 'strong' })).toBeInTheDocument();
     expect(getUserAudit).not.toHaveBeenCalled();
   });
 
