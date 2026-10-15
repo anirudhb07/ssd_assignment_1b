@@ -37,10 +37,12 @@ Smaller issues:
 
 | Change | Why |
 | --- | --- |
+| Added `sp_advance_order_status(UUID)` and `sp_wallet_topup(UUID, DECIMAL)` in `sql/07_order_status_and_topup.sql`, with rollback-only psql regression tests in `sql/tests/order_status_and_topup.sql` | Addresses the status and wallet parts of #5 (issue #9). Status advances lock the order and reject missing/already-delivered orders. Top-ups atomically add a positive finite amount rounded to cents (minimum rounded credit 0.01), reject missing users, and let the existing trigger write CREDIT. Apply with `docker compose run --rm seed` without resetting data. Materialized-view refresh tracking remains separate work. |
 | Added `docker-compose.yml`, `docker/seed/`, `.env.example` | One command gives every team member the same databases and data. The seed step skips when data exists, so it is safe to re-run. |
 | Added `.gitattributes` (`*.sh` with LF endings) | The seed script must keep Unix line endings to run in Linux containers when checked out on Windows. |
 | Seed runs every numbered SQL file (except `06`) | New scripts (`sql/07`–`10`, one per member) are applied without editing the seed or each other's files. |
 | Added index `idx_orders_created_at` (`sql/08_orders_recent_index.sql`) | No index covered “newest orders first”, so each page of the order list scanned and sorted all 120,000 orders: 128 ms per request, down to 1.5 ms with the index. |
+| Fixed audit row ordering (`sql/08_audit_ordering.sql`, `postgres_seeder.py`): `seq BIGSERIAL` column; `fn_wallet_audit()` uses `clock_timestamp()`, or `bitestream.audit_at` when the seeder sets it for its transaction; the seeder applies orders oldest first and gives each customer an opening CREDIT | Fixes "What did not work" #2. Audit rows now span 30 days, and for every customer the rows ordered by `seq` chain from ₹0 to the current balance (checked by `api/tests/audit.test.js`). |
 | *(Whoever makes a fix: add it here, with the reason)* | |
 
 ## Suggestions for the original authors

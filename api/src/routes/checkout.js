@@ -1,36 +1,28 @@
+import { randomUUID } from 'node:crypto';
 import { Router } from 'express';
-import { auditEntry, order, sendMock, users } from '../mocks.js';
+import { ORDER_SELECT } from '../db/orders.js';
+import { withTransaction } from '../db/postgres.js';
+import { readWalletChange } from '../db/wallet.js';
+import { requireAmount, requireId } from '../lib/checkoutInput.js';
+import { notFound } from '../lib/errors.js';
 
 export const checkoutRouter = Router();
 
-// POST /api/checkout  { userId, restaurantId, amount, items? } — MOCK.
-//
-// TODO (Member A): inside withTransaction():
-//   1. SELECT wallet_balance (balanceBefore)
-//   2. CALL sp_execute_checkout(gen_random_uuid(), userId, restaurantId, amount)
-//   3. SELECT the new balance and the newest wallet_audit_logs row
-// Errors from the procedure are mapped by lib/errors.js (402 / 409 / 404).
-//
-// While mocked, you can test the failure screens:
-//   amount > 5000           -> 402 INSUFFICIENT_BALANCE
-//   ?simulate=active-order  -> 409 ACTIVE_ORDER_EXISTS
-checkoutRouter.post('/', (req, res) => {
-  const amount = Number(req.body?.amount) || 0;
-  const balanceBefore = users[0].walletBalance;
-
-  if (req.query.simulate === 'active-order') {
-    sendMock(res, { error: { code: 'ACTIVE_ORDER_EXISTS', message: 'This customer already has an order in progress. Mark it as delivered before placing a new one.' } }, 409);
-    return;
-  }
-  if (amount > 5000) {
-    sendMock(res, { error: { code: 'INSUFFICIENT_BALANCE', message: `Not enough money in the wallet. Balance is ₹${balanceBefore} but this order costs ₹${amount}. Top up the wallet and try again.` } }, 402);
-    return;
-  }
-
-  sendMock(res, {
-    order: { ...order, totalAmount: amount, userId: req.body?.userId ?? order.userId, restaurantId: req.body?.restaurantId ?? order.restaurantId },
-    balanceBefore,
-    balanceAfter: balanceBefore - amount,
-    auditEntry: { ...auditEntry, amountChanged: amount, balanceAfter: balanceBefore - amount },
-  }, 201);
+// POST /api/checkout { userId, restaurantId, amount, items? } — REAL.
+checkoutRouter.post('/', async (req, res) => {
+  const userId = requireId(req.body?.userId, 'Customer ID');
+  const restaurantId = requireId(req.body?.restaurantId, 'Restaurant ID');
+  const amount = requireAmount(req.body?.amount);
+  const result = await withTransaction(async (client) => {
+    // Lock before reading so balanceBefore belongs to this checkout even
+    // when another request is changing the same wallet concurrently.
+    const before = await client.query('SELECT wallet_balance FROM users WHERE id = $1 FOR UPDATE', [userId]);
+    if (!before.rowCount) throw notFound('That customer');
+    const orderId = randomUUID();
+    await client.query('CALL sp_execute_checkout($1, $2, $3, $4)', [orderId, userId, restaurantId, amount]);
+    const order = await client.query(`${ORDER_SELECT} WHERE o.id = $1`, [orderId]);
+    const { walletBalance, auditEntry } = await readWalletChange(client, userId);
+    return { order: order.rows[0], balanceBefore: before.rows[0].wallet_balance, balanceAfter: walletBalance, auditEntry };
+  });
+  res.status(201).json(result);
 });

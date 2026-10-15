@@ -38,20 +38,20 @@ The mapping from PostgreSQL errors lives in `api/src/lib/errors.js`.
 | `GET /health` | REAL | `SELECT 1`, Mongo `ping` | Home |
 | `GET /users` | REAL | `users` | Browse, actor switcher |
 | `GET /users/:id` | REAL | `users`, `orders` | Browse detail |
-| `GET /users/:id/audit` | MOCK | `wallet_audit_logs` | Wallet |
-| `POST /users/:id/topup` | MOCK | `sp_wallet_topup` (to add) | Checkout |
+| `GET /users/:id/audit` | REAL | `wallet_audit_logs` | Wallet |
+| `POST /users/:id/topup` | REAL | `sp_wallet_topup` | Checkout |
 | `GET /restaurants` | REAL | `restaurants` | Browse, actor switcher |
 | `GET /restaurants/:id` | REAL | `restaurants`, `restaurant_order_summary` | Browse detail |
 | `GET /restaurants/:id/menu` | MOCK | Mongo `Menus` | Checkout, Reviews |
 | `GET /orders` | REAL | `orders` | Browse |
 | `GET /orders/:id` | REAL | `orders` | Browse detail |
-| `POST /orders/:id/advance` | MOCK | `sp_advance_order_status` (to add) | Browse detail |
-| `POST /checkout` | MOCK | `sp_execute_checkout` | Checkout |
+| `POST /orders/:id/advance` | REAL | `sp_advance_order_status` | Browse detail |
+| `POST /checkout` | REAL | `sp_execute_checkout` | Checkout |
 | `GET /analytics/revenue` | MOCK | Window query, `sql/06` | Analytics |
 | `GET /analytics/ranking` | MOCK | Window query, `DENSE_RANK()` | Analytics |
 | `GET /analytics/summary` | MOCK | `restaurant_order_summary` + refresh log | Analytics |
 | `POST /analytics/summary/refresh` | MOCK | `sp_refresh_restaurant_summary` | Analytics |
-| `GET /drivers/nearby` | MOCK | Mongo `$geoNear`, `mongo/02` | Map |
+| `GET /drivers/nearby` | REAL | Mongo `$geoNear`, `mongo/02` | Map |
 | `GET /reviews/stats` | REAL | Mongo `$facet`, `mongo/03` | Reviews |
 
 ## Details
@@ -67,8 +67,9 @@ Item: `{ "id", "name", "walletBalance" }`
 `{ "id", "name", "walletBalance", "activeOrder": Order | null }`. `activeOrder` is the order in `PREPARING` or `DELIVERING`, if there is one.
 
 ### `GET /users/:id/audit?from=&to=&page=&pageSize=`
-`from` and `to` are dates (`2026-10-01`), both optional. Newest first.
+`from` and `to` are dates (`2026-10-01`), both optional and both included (`to=2026-10-12` covers that whole day). They are Indian calendar days (`Asia/Kolkata`), the same days the app shows. Newest first (`changed_at`, then `seq`, both descending).
 Item: `{ "id", "changedAt", "actionType": "DEBIT" | "CREDIT", "amountChanged", "balanceAfter" }`
+`400 BAD_REQUEST` if a date isn't a real `YYYY-MM-DD` date or `from` is after `to`; `404` if the customer doesn't exist; an empty list if the range has no entries.
 
 ### `POST /users/:id/topup`
 Body: `{ "amount": 1000 }`
@@ -112,7 +113,7 @@ Body: `{ "userId", "restaurantId", "amount", "items"?: [ { "name", "price", "qua
 ```
 Errors: `402 INSUFFICIENT_BALANCE`, `409 ACTIVE_ORDER_EXISTS`, `404 NOT_FOUND`, `400 INVALID_AMOUNT`.
 
-While mocked: `amount > 5000` returns 402, and `?simulate=active-order` returns 409.
+Checkout and top-up amounts must be positive JSON numbers with at most two decimal places, up to 99999999.99. Invalid amounts (including a top-up that exceeds wallet capacity) return `400 INVALID_AMOUNT`; malformed or missing IDs return `400 BAD_REQUEST`, and unknown IDs return `404 NOT_FOUND`. Both wallet routes return the audit entry created by that request. Checkout, top-up, and advancement run in transactions; failed requests leave balances, orders, and audit rows unchanged.
 
 ### `GET /analytics/revenue?restaurantId=`
 `{ "restaurantId", "restaurantName", "points": [ { "date": "2026-09-12", "dailyRevenue", "movingAvg7d" } ] }`, oldest first.
