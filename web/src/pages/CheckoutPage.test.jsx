@@ -303,5 +303,22 @@ describe('Checkout', () => {
     expect(screen.queryByText('audit-debit')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Place order' })).toBeDisabled();
   });
+  // Payment problems and their next step appear in the cart right under Place
+  // order, not below the whole menu.
+  it('shows payment problems and their next step right under Place order', async () => {
+    const after = (a, b) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+    checkout.mockRejectedValueOnce(new ApiError(402, 'INSUFFICIENT_BALANCE', 'Not enough funds. Please top up.'));
+    setup(); await choose(); await add(); await submit();
+    const alert = await cart().findByRole('alert');
+    expect(alert).toHaveTextContent('Not enough funds. Please top up.');
+    expect(after(cart().getByRole('button', { name: 'Place order' }), alert)).toBe(true);
+    await userEvent.click(cart().getByRole('button', { name: 'Top up' }));
+    expect(cart().getByLabelText('Top-up amount (₹)')).toBeInTheDocument();
+
+    checkout.mockRejectedValueOnce(new ApiError(409, 'ACTIVE_ORDER_EXISTS', 'Finish your current order first.'));
+    getUser.mockResolvedValue({ id: 'u1', name: 'Customer One', walletBalance: 100, activeOrder: { id: 'active-42' } });
+    await submit();
+    expect(await cart().findByRole('link', { name: 'View active order' })).toHaveAttribute('href', '/browse/orders/active-42');
+  });
 });
 
