@@ -59,7 +59,7 @@ describe('GET /api/restaurants/:id/menu', () => {
     });
   });
 
-  it('returns 404 for a restaurant without a menu', async () => {
+  it('returns 404 for a well-formed id that has no menu', async () => {
     const res = await request(app).get(
       '/api/restaurants/00000000-0000-0000-0000-000000000000/menu',
     );
@@ -67,9 +67,10 @@ describe('GET /api/restaurants/:id/menu', () => {
     expect(res.body.error.code).toBe('NOT_FOUND');
   });
 
-  it('returns 404 for an id that is not a restaurant id', async () => {
+  it('returns 400 for a malformed restaurant id', async () => {
     const res = await request(app).get('/api/restaurants/abc/menu');
-    expect(res.status).toBe(404);
-    expect(res.body.error.code).toBe('NOT_FOUND');
+    expect(res.status).toBe(400);
+    expect(typeof res.body.error.code).toBe('string');
+    expect(typeof res.body.error.message).toBe('string');
   });
 });

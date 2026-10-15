@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { getDb } from '../db/mongo.js';
 import { query } from '../db/postgres.js';
+import { requireId } from '../lib/checkoutInput.js';
 import { notFound } from '../lib/errors.js';
 import { paged, parsePagination } from '../lib/pagination.js';
 
@@ -53,8 +54,11 @@ restaurantsRouter.get('/:id', async (req, res) => {
 // GET /api/restaurants/:id/menu — REAL.
 // The Menus document for the restaurant. Menus use the PostgreSQL restaurant id
 // (mongo_seeder.py reads it from PostgreSQL), so any id from /restaurants works.
-// Anything without a menu, including an id that isn't a restaurant, is a 404.
+// A malformed id is a 400 (same as the other routes). A well-formed id with no
+// menu, including an id that isn't a restaurant, is a 404.
 restaurantsRouter.get('/:id/menu', async (req, res) => {
+  requireId(req.params.id, 'Restaurant ID');
+
   const db = await getDb();
   const menu = await db
     .collection('Menus')
