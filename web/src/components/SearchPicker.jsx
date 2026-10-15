@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useDebouncedValue } from '../hooks/useDebouncedValue.js';
 
 // Search one server-side page, retaining the current choice outside matches.
@@ -11,7 +11,6 @@ export function SearchPicker({
   autoSelectMatch = false,
 }) {
   const [search, setSearch] = useState('');
-  const statusId = useId();
   const pendingSelection = useRef(false);
   const debounced = useDebouncedValue(search);
   const list = useQuery({
@@ -38,18 +37,15 @@ export function SearchPicker({
     }
   }, [ready, autoSelectMatch, search, list.data, list.isError, items, selected?.id, onSelect]);
 
-  const firstOption = searching ? 'Loading…'
-    : list.isError ? `Couldn’t load ${noun}s`
-      : items.length ? `Choose a ${noun}` : 'No matches';
-  const status = searching ? `Loading ${noun}s…`
-    : list.isError ? `Couldn’t load ${noun}s. ${list.error.message}`
-      : !items.length ? 'No matches. Try another search.' : '';
+  // Keep the native select's displayed text stable while results load/change.
+  // Changing option text can resize a native select and make the header wrap.
+  const firstOption = `Choose a ${noun}`;
 
   return (
     <div className="search-picker">
       <input
         className="input" type="search" aria-label={searchLabel}
-        placeholder={`Search ${noun}s`} aria-describedby={statusId}
+        placeholder={`Search ${noun}s`}
         value={search} onChange={(e) => {
           pendingSelection.current = Boolean(e.target.value.trim());
           setSearch(e.target.value);
@@ -57,7 +53,7 @@ export function SearchPicker({
       />
       <select
         className="select" aria-label={selectLabel} value={selected?.id ?? ''}
-        disabled={!ready} aria-describedby={statusId}
+        disabled={!ready}
         onChange={(e) => {
           pendingSelection.current = false;
           const found = items.find((x) => x.id === e.target.value);
@@ -69,7 +65,6 @@ export function SearchPicker({
         {selected && !items.some((x) => x.id === selected.id) && <option value={selected.id}>{selected.name}</option>}
         {items.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
       </select>
-      <span id={statusId} className="search-picker__status muted small" role="status">{status}</span>
     </div>
   );
 }
