@@ -7,27 +7,26 @@
 --      "6 rows back" is not "6 days back" when a restaurant has
 --      days with no delivered orders.
 --
--- 2. restaurant_summary_refresh_log
+-- 2. fn_restaurant_revenue_ranking()
+--      DENSE_RANK() revenue ranking, read from the materialized
+--      view so it always agrees with the summary numbers and the
+--      "last refreshed" time.
+--
+-- 3. restaurant_summary_refresh_log
 --      One row per refresh of restaurant_order_summary, so the
 --      Analytics screen can show a "last refreshed" time.
 --
--- 3. sp_refresh_restaurant_summary()  (redefined)
+-- 4. sp_refresh_restaurant_summary()  (redefined)
 --      Same concurrent refresh as in 05, now also writes a log row.
 --
 -- Safe to run more than once (CREATE OR REPLACE / IF NOT EXISTS).
 -- Must run after 05_materialized_views.sql, which the seed script
 -- already guarantees by running files in numeric order.
+--
+-- The per-restaurant query is already covered by
+-- idx_orders_delivered_restaurant_date in 02_indexes.sql
+-- (restaurant_id, created_at) WHERE status = 'DELIVERED'.
 -- =====================================================
-
-
--- -----------------------------------------------------
--- Supporting index for the per-restaurant query.
--- Only DELIVERED orders are ever aggregated.
--- -----------------------------------------------------
-
-CREATE INDEX IF NOT EXISTS idx_orders_restaurant_delivered
-ON orders (restaurant_id, created_at)
-WHERE status = 'DELIVERED';
 
 
 -- -----------------------------------------------------
@@ -103,7 +102,56 @@ $$;
 
 
 -- -----------------------------------------------------
--- 2. Refresh log
+-- 2. Revenue ranking
+--
+-- A function rather than a view on purpose: 05 runs
+-- DROP MATERIALIZED VIEW restaurant_order_summary on every seed
+-- run, and PostgreSQL refuses that while a view depends on it.
+-- A SQL function body is not tracked as a dependency.
+--
+--   SELECT * FROM fn_restaurant_revenue_ranking() LIMIT 10;
+--
+-- Restaurants with no delivered orders are left out, as in
+-- sql/06_window_analytics.sql. Ties share a rank (DENSE_RANK).
+-- -----------------------------------------------------
+
+CREATE OR REPLACE FUNCTION fn_restaurant_revenue_ranking()
+RETURNS TABLE (
+    revenue_rank          INTEGER,
+    restaurant_id         UUID,
+    restaurant_name       TEXT,
+    completed_order_count BIGINT,
+    total_revenue         DECIMAL(14,2)
+)
+LANGUAGE sql
+STABLE
+AS $$
+
+    SELECT
+        DENSE_RANK() OVER (
+            ORDER BY s.completed_revenue DESC
+        )::INTEGER
+            AS revenue_rank,
+
+        s.restaurant_id,
+        s.restaurant_name::TEXT,
+        s.completed_order_count,
+        s.completed_revenue
+            AS total_revenue
+
+    FROM restaurant_order_summary s
+
+    WHERE s.completed_order_count > 0
+
+    ORDER BY
+        revenue_rank,
+        s.restaurant_name;
+
+$$;
+
+
+-- -----------------------------------------------------
+-- 3. Refresh log
 -- -----------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS restaurant_summary_refresh_log (
@@ -136,7 +184,7 @@ ON restaurant_summary_refresh_log (refreshed_at DESC);
 
 
 -- -----------------------------------------------------
--- 3. Refresh procedure that logs each run
+-- 4. Refresh procedure that logs each run
 --
 -- The log row is written in the caller's transaction: if the
 -- refresh fails, nothing is logged.
@@ -202,6 +250,10 @@ $$;
 --        LIMIT 1)
 --   )
 --   LIMIT 10;
+--
+-- Top 10 by revenue:
+--
+--   SELECT * FROM fn_restaurant_revenue_ranking() LIMIT 10;
 --
 -- Refresh and read the log:
 --
