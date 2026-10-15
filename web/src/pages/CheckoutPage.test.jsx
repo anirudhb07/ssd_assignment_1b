@@ -320,5 +320,23 @@ describe('Checkout', () => {
     await submit();
     expect(await cart().findByRole('link', { name: 'View active order' })).toHaveAttribute('href', '/browse/orders/active-42');
   });
+  // A customer with an order in progress can't order again whatever their
+  // balance, so don't send them to Top up first.
+  it('warns about an order in progress before paying, and does not offer Top up for it', async () => {
+    getUser.mockResolvedValue({ id: 'u1', name: 'Customer One', walletBalance: 0.05, activeOrder: { id: 'active-42', status: 'PREPARING' } });
+    setup(); await choose(); await add();
+    expect(await cart().findByText(/already has an order in progress/)).toBeInTheDocument();
+    expect(cart().getByRole('link', { name: 'View active order' })).toHaveAttribute('href', '/browse/orders/active-42');
+    expect(cart().getByRole('button', { name: 'Place order' })).toBeEnabled(); // the database still decides
+
+    checkout.mockRejectedValueOnce(new ApiError(402, 'INSUFFICIENT_BALANCE', 'Not enough money in the wallet. Top up the wallet and try again.'));
+    await submit();
+    const alert = await cart().findByRole('alert');
+    expect(alert).toHaveTextContent('Not enough money in the wallet.');
+    expect(alert).not.toHaveTextContent('Top up the wallet');
+    expect(cart().getByText(/Topping up won’t help yet/)).toBeInTheDocument();
+    expect(cart().queryByRole('button', { name: 'Top up' })).not.toBeInTheDocument();
+    expect(cart().getAllByRole('link', { name: 'View active order' })).toHaveLength(1);
+  });
 });
 

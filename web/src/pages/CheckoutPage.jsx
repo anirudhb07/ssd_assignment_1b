@@ -144,6 +144,9 @@ function MenuAndCart({ menu, restaurant, customer, onChangeRestaurant }) {
     onSuccess: () => { payment.reset(); setTopup(''); return refreshWallet(); },
   });
   const busy = payment.isPending || credit.isPending;
+  // The customer's order in progress, if any (refetched after a failed payment).
+  const activeOrder = user.data?.activeOrder ?? null;
+  const insufficient = payment.error?.status === 402 && payment.error.code === 'INSUFFICIENT_BALANCE';
   // The 409 link appears once the customer is reloaded, so scroll again then.
   useEffect(() => {
     feedback.current?.scrollIntoView?.({ block: 'nearest' });
@@ -244,11 +247,24 @@ function MenuAndCart({ menu, restaurant, customer, onChangeRestaurant }) {
         <Button disabled={!customer || !validTotal || busy || !user.isSuccess} onClick={placeOrder}>{payment.isPending ? 'Placing order…' : 'Place order'}</Button>
         {/* Payment problems and their next step sit right under Place order, so
             they're seen without scrolling past the menu. */}
-        {(payment.error || showTopup) && <div className="stack checkout-feedback" ref={feedback}>
+        {(payment.error || showTopup || activeOrder) && <div className="stack checkout-feedback" ref={feedback}>
+          {/* Say so before paying: the database will refuse a second active
+              order (partial unique index), and a top-up wouldn't change that. */}
+          {activeOrder && !payment.error && !payment.isPending && <>
+            <p className="alert alert--info" role="status">This customer already has an order in progress (<StatusBadge status={activeOrder.status} />). A new order will be refused until it is delivered.</p>
+            <Link to={`/browse/orders/${activeOrder.id}`} className="btn btn--secondary">View active order</Link>
+          </>}
           {payment.error && <>
-            <p className="alert alert--error" role="alert">{payment.error.message}</p>
+            <p className="alert alert--error" role="alert">
+              {/* With an order in progress a top-up doesn't help, so drop that advice. */}
+              {insufficient && activeOrder ? payment.error.message.replace(/\s*Top up the wallet and try again\.?\s*$/, '') : payment.error.message}
+            </p>
             {payment.error.code === 'NETWORK' && <p className="muted small">The order may or may not have gone through. Check the wallet and orders before trying again.</p>}
-            {payment.error.status === 402 && payment.error.code === 'INSUFFICIENT_BALANCE' && !showTopup && <Button variant="secondary" disabled={busy} onClick={() => setShowTopup(true)}>Top up</Button>}
+            {insufficient && activeOrder && <>
+              <p className="small">Topping up won’t help yet: this customer also has an order in progress, and it must be delivered before they can order again.</p>
+              <Link to={`/browse/orders/${activeOrder.id}`} className="btn btn--secondary">View active order</Link>
+            </>}
+            {insufficient && !activeOrder && !showTopup && <Button variant="secondary" disabled={busy} onClick={() => setShowTopup(true)}>Top up</Button>}
             {payment.error.status === 409 && payment.error.code === 'ACTIVE_ORDER_EXISTS' && <QueryState query={user}>{(data) => data.activeOrder
               ? <Link to={`/browse/orders/${data.activeOrder.id}`} className="btn btn--secondary">View active order</Link>
               : <p>No active order was found. You can try placing your order again.</p>}</QueryState>}
