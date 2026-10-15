@@ -23,6 +23,61 @@ docker compose up -d
 
 Wait a few minutes on the first run, then open **http://localhost:5173**. The home page shows whether the API and both databases are connected.
 
+## Screens
+
+There is no login. The **Acting as** switcher in the header picks the role for the demo: **Customer**, **Restaurant manager** or **Dispatcher**, and for a customer, which one. Wireframes and user descriptions are in [`docs/design/`](docs/design/).
+
+| Screen | Route | Mainly for | What it covers |
+| --- | --- | --- | --- |
+| Home | `/` | Everyone | Links to every screen; shows whether the API and both databases are connected |
+| Browse: Restaurants, Users, Orders | `/browse` | Everyone | Browsing at scale: search, status filter, pages loaded from the server (never all 120,000 orders at once) |
+| Restaurant | `/browse/restaurants/:id` | Restaurant manager | Totals from the materialized view, its location, and links to its orders, menu and reviews, and analytics |
+| Customer | `/browse/users/:id` | Dispatcher | Wallet balance, the order in progress with **Advance status**, links to wallet history and orders |
+| Order | `/browse/orders/:id` | Dispatcher | **Advance status**: Preparing → Delivering → Delivered, which is how the one-active-order rule is demonstrated |
+| Checkout | `/checkout` | Customer | **Workflow 1** (`sp_execute_checkout`): balance before and after, the new `wallet_audit_logs` row, and friendly messages for not enough money (with **Top up**) and a second active order (with a link to it) |
+| Wallet | `/wallet` | Customer | **Audit trail**: one customer's `wallet_audit_logs`, read-only, with a date filter and the balance after each change |
+| Analytics | `/analytics` | Restaurant manager | **Workflow 2 + materialized view**: 7-day moving average chart, `DENSE_RANK` table, summary numbers with "last refreshed" and **Refresh** _(in review: #63)_ |
+| Map | `/map` | Dispatcher | **Workflow 3** (`$geoNear`): drivers within 5 km of a chosen restaurant, sorted by distance, updated every 5 seconds |
+| Reviews | `/reviews` | Restaurant manager | **Workflow 4** (`$facet`): rating distribution, top tags, average rating, and the restaurant's menu document _(in progress: #24)_ |
+
+Every screen has loading, empty and error states and works at phone width.
+
+## Demo path
+
+A walk through all four workflows on the seeded data, in about five minutes. Start the app with `docker compose up -d` and check that `ping-simulator` is running (`docker compose ps`), or the map has no drivers.
+
+1. **Home** (http://localhost:5173): the status bar shows the API, PostgreSQL and MongoDB connected.
+2. **Browse:** open **Orders**. It shows one page of the 120,000 orders; filter **Status: Preparing**, then open **Users** and search for a name.
+3. **Place an order (Workflow 1):** in the header choose **Acting as: Customer** and pick a customer with a few thousand rupees (**Browse → Users** shows balances). On **Checkout**, press **View menu** on a restaurant, add two items and an add-on, and press **Place order**. The result shows the balance before and after and the new DEBIT row from the audit trigger.
+4. **Second order blocked:** for the same customer, place another order. It fails with "This customer already has an order in progress…" and a **View active order** link: the partial unique index at work.
+5. **Advance the order:** follow **View active order** and press **Advance status** twice (Delivering, then Delivered). Back on **Checkout**, the same customer can order again.
+6. **Not enough money:** switch to a customer with a small balance and build a cart that costs more. Checkout explains the shortfall and offers **Top up**; top up, then **Place order** succeeds.
+7. **Wallet (audit trail):** open **Wallet**. The newest rows are the debits and the top-up from steps 3–6, each with the balance after it. Set **From** and **To** to narrow it to today.
+8. **Analytics (Workflow 2):** open **Analytics**, press **Refresh** and watch "last refreshed" change; click a restaurant in the ranking to switch the chart _(in review: #63)_.
+9. **Map (Workflow 3):** open **Map** and choose a restaurant. Drivers within 5 km appear on the map and in the list, nearest first; wait a few seconds and their positions and times update.
+10. **Reviews (Workflow 4):** open **Reviews** for the rating chart, top tags, the average rating and the menu _(in progress: #24)_.
+
+Shortcut: on a restaurant's page (**Browse → Restaurants →** a restaurant), **Menu & reviews** and **Analytics** open those screens for that restaurant.
+
+## What the tests prove
+
+The API tests run against the seeded databases, and the web tests run the screens with the API replaced by fakes. Commands are under [Tests](#tests); in short, `docker compose exec api npm test` and `docker compose exec web npm test`.
+
+| Requirement | Tests | What they check |
+| --- | --- | --- |
+| Checkout succeeds | `api/tests/checkout.test.js`, `web/src/pages/CheckoutPage.test.jsx` | The stored order, the exact balances before and after, and its DEBIT audit row; the screen shows only what the API returned |
+| Not enough money | same files, `api/tests/errors.test.js` | A friendly 402 that changes nothing; on screen, **Top up** then an explicit retry |
+| One active order (partial unique index) | `checkout.test.js`, `errors.test.js`, `sql/tests/order_status_and_topup.sql` | A second checkout is rolled back with a 409, and ordering works again after delivery |
+| Advance status | `web/src/pages/OrderDetail.test.jsx`, `DetailPage.test.jsx`, `sql/tests/order_status_and_topup.sql` | Both steps, a clear message once delivered, and fast double clicks send one request |
+| No double charge | `CheckoutPage.test.jsx` | **Place order** can't be sent twice while a payment is in progress |
+| Money adds up | `web/src/lib/checkout.test.js` | Prices are added in paise, so 0.1 + 0.2 is charged as 0.3 |
+| Audit trail | `api/tests/audit.test.js`, `WalletPage.test.jsx` | Rows span 30 days and chain from ₹0 to each customer's balance; the date filter uses Indian calendar days with both ends included; bad dates get a readable message |
+| Browsing at scale | `api/tests/api.test.js`, `api/tests/browse.test.js`, `BrowsePage.test.jsx` | One page at a time, at most 100 rows, pages don't overlap, filters and search |
+| Analytics | `api/tests/analytics.test.js` | `DENSE_RANK` ties share a rank; the average covers 7 calendar days even when a restaurant has gaps; **Refresh** moves "last refreshed" forward |
+| Map | `api/tests/drivers.test.js`, `MapPage.test.jsx` | Drivers sorted by distance, all within 5 km, one per driver; a driver whose newest ping is inactive or outside the circle is not shown; the screen polls every 5 seconds |
+| Reviews and menus | `api/tests/api.test.js`, `api/tests/menu.test.js` | All five rating buckets from `$facet`; every restaurant has its own menu; 404 and 400 for a missing or malformed id |
+| Loading, empty, error | `web/src/components/ui/QueryState.test.jsx` and each page's tests | Every state renders, and errors offer **Try again** |
+
 ## Development Setup (Docker)
 
 Docker gives every team member the same PostgreSQL, MongoDB, API and web app, with the same seeded data. You don't need PostgreSQL, MongoDB, Python or Node.js on your machine.
