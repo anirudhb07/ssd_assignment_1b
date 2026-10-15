@@ -13,8 +13,8 @@ export function ActorSwitcher() {
   const { actor, setRole, setUser, setRestaurant } = useActor();
 
   return (
-    <div className="row small">
-      <label className="row" style={{ gap: 'var(--space-2)' }}>
+    <div className="actor-switcher small">
+      <label className="actor-switcher__role">
         <span className="muted">Acting as</span>
         <select className="select" value={actor.role} onChange={(e) => setRole(e.target.value)}>
           {ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
@@ -22,10 +22,10 @@ export function ActorSwitcher() {
       </label>
 
       {actor.role === 'customer' && (
-        <SearchPicker noun="customer" fetchList={listUsers} selected={actor.user} onSelect={setUser} />
+        <SearchPicker key="customer" noun="customer" fetchList={listUsers} selected={actor.user} onSelect={setUser} autoSelectMatch />
       )}
       {actor.role === 'manager' && (
-        <SearchPicker noun="restaurant" fetchList={listRestaurants} selected={actor.restaurant} onSelect={setRestaurant} />
+        <SearchPicker key="restaurant" noun="restaurant" fetchList={listRestaurants} selected={actor.restaurant} onSelect={setRestaurant} autoSelectMatch />
       )}
     </div>
   );

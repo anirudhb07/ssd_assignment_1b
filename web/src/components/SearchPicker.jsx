@@ -1,18 +1,18 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useDebouncedValue } from '../hooks/useDebouncedValue.js';
 
-// A search box that narrows a dropdown of up to 20 matches, so any of the
-// 10,000 customers or 500 restaurants can be picked. The current choice
-// stays listed even when it isn't among the matches. Used by the "Acting as"
-// switcher and the Wallet screen.
-//
+// Search one server-side page, retaining the current choice outside matches.
+// Automatic selection is opt-in: Wallet keeps its explicit selection behavior.
 // selected / onSelect use { id, name } (or null for no choice).
 export function SearchPicker({
   noun, fetchList, selected, onSelect,
   searchLabel = `Search ${noun}s`, selectLabel = `Choose a ${noun}`,
+  autoSelectMatch = false,
 }) {
   const [search, setSearch] = useState('');
+  const statusId = useId();
+  const pendingSelection = useRef(false);
   const debounced = useDebouncedValue(search);
   const list = useQuery({
     queryKey: ['actor-picker', noun, debounced],
@@ -20,36 +20,54 @@ export function SearchPicker({
     placeholderData: keepPreviousData,
   });
   const items = list.data?.items ?? [];
+  const searching = search !== debounced || list.isFetching || list.isPending;
+  const ready = !searching && !list.isPlaceholderData && list.isSuccess;
 
-  const firstOption = list.isPending ? 'Loading…'
+  // Only a user edit arms selection: refetches or manual clearing must not
+  // change the actor later. Like Map, retain a matching choice or use the first result.
+  useEffect(() => {
+    if (list.isError) pendingSelection.current = false;
+    if (!ready || !pendingSelection.current) return;
+    pendingSelection.current = false;
+    const match = items.find((item) => item.id === selected?.id) ?? items[0];
+    if (autoSelectMatch && search.trim()
+      && match?.id && match.name && match.id !== selected?.id) {
+      onSelect({ id: match.id, name: match.name });
+    }
+  }, [ready, autoSelectMatch, search, list.data, list.isError, items, selected?.id, onSelect]);
+
+  const firstOption = searching ? 'Loading…'
     : list.isError ? `Couldn’t load ${noun}s`
-    : items.length ? `Choose a ${noun}`
-    : 'No matches';
+    : items.length ? `Choose a ${noun}` : 'No matches';
+  const status = searching ? `Loading ${noun}s…`
+    : list.isError ? `Couldn’t load ${noun}s. ${list.error.message}`
+    : !items.length ? 'No matches. Try another search.' : '';
 
   return (
-    <>
+    <div className="search-picker">
       <input
-        className="input"
-        type="search"
-        aria-label={searchLabel}
-        placeholder={`Search ${noun}s`}
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        style={{ width: '10rem' }}
+        className="input" type="search" aria-label={searchLabel}
+        placeholder={`Search ${noun}s`} aria-describedby={statusId}
+        value={search} onChange={(e) => {
+          pendingSelection.current = Boolean(e.target.value.trim());
+          setSearch(e.target.value);
+        }}
       />
       <select
-        className="select"
-        aria-label={selectLabel}
-        value={selected?.id ?? ''}
+        className="select" aria-label={selectLabel} value={selected?.id ?? ''}
+        disabled={!ready} aria-describedby={statusId}
         onChange={(e) => {
+          pendingSelection.current = false;
           const found = items.find((x) => x.id === e.target.value);
-          onSelect(found ? { id: found.id, name: found.name } : null);
+          if (found) onSelect({ id: found.id, name: found.name });
+          else if (!e.target.value) onSelect(null);
         }}
       >
         <option value="">{firstOption}</option>
         {selected && !items.some((x) => x.id === selected.id) && <option value={selected.id}>{selected.name}</option>}
         {items.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
       </select>
-    </>
+      <span id={statusId} className="search-picker__status muted small" role="status">{status}</span>
+    </div>
   );
 }

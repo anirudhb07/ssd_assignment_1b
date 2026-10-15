@@ -136,3 +136,7 @@ a.btn { text-decoration: none; } /* links styled as buttons, e.g. "View orders" 
 
 /* Screen placeholder (delete once a screen is built) */
 .placeholder ul { margin: 0; padding-left: 1.2em; display: grid; gap: var(--space-1); }
+.search-picker { display: grid; grid-template-columns: minmax(0, 10rem) minmax(0, 13rem); gap: var(--space-2); max-width: 100%; }
+.search-picker > .input, .search-picker > .select { width: 100%; }
+.search-picker__status { grid-column: 1 / -1; overflow-wrap: anywhere; }
+.search-picker__status:empty { display: none; }
